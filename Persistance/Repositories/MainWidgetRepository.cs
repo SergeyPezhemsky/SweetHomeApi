@@ -12,17 +12,20 @@ public class MainWidgetRepository(SweetHomeDbContext context) : IMainWidgetRepos
             .ToListAsync();
     }
 
-    public async Task UpdateAsync(List<MainWidget> mainWidgets)
+    public async Task UpdateAsync(List<MainWidget> mainWidgets, string userId)
     {
         foreach (var widget in mainWidgets)
         {
             var existingWidget = await context.Set<MainWidget>()
-                .FirstOrDefaultAsync(w => w.Id == widget.Id);
+                .FirstOrDefaultAsync(w => w.Id == widget.Id && w.UserId == userId);
 
             if (existingWidget != null)
             {
-                // Обновляем только измененные свойства
-                context.Entry(existingWidget).CurrentValues.SetValues(widget);
+                existingWidget.Order = widget.Order;
+                existingWidget.Name = widget.Name;
+                existingWidget.Icon = widget.Icon;
+                existingWidget.Size = widget.Size;
+                existingWidget.Hide = widget.Hide;
             }
         }
 

@@ -25,11 +25,12 @@ public class WidgetsService : IWidgetsService
     /// Редактирование списка виджетов.
     /// </summary>
     /// <param name="widgets">Список виджетов для обновления.</param>
+    /// <param name="userId">Идентификатор пользователя.</param>
     /// <returns>Задача обновления.</returns>
-    public async Task UpdateWidgetsAsync(List<MainWidget> widgets)
+    public async Task UpdateWidgetsAsync(List<MainWidget> widgets, string userId)
     {
         // Дополнительная бизнес-логика перед обновлением, если требуется
-        await _mainWidgetRepository.UpdateAsync(widgets);
+        await _mainWidgetRepository.UpdateAsync(widgets, userId);
     }
 
     public async Task AddDefaultWidgetForUser(string userId)

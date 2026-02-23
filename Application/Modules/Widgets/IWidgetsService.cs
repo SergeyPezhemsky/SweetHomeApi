@@ -13,8 +13,9 @@ public interface IWidgetsService
     /// Редактирование списка виджетов.
     /// </summary>
     /// <param name="widgets">Список виджетов для обновления.</param>
+    /// <param name="userId">Идентификатор пользователя.</param>
     /// <returns>Задача обновления.</returns>
-    Task UpdateWidgetsAsync(List<MainWidget> widgets);
+    Task UpdateWidgetsAsync(List<MainWidget> widgets, string userId);
     
     Task AddDefaultWidgetForUser(string userId);
 }

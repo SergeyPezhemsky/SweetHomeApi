@@ -1,7 +1,8 @@
-using Application.Modules.Widgets;
+п»їusing Application.Modules.Widgets;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using SweetHomeApi.Controllers.Widgets.Dto;
 
 namespace SweetHomeApi.Controllers.Widgets;
 
@@ -9,14 +10,14 @@ namespace SweetHomeApi.Controllers.Widgets;
 [Route("api/[controller]")]
 public class WidgetsController : ControllerBase
 {
-    private readonly IWidgetsService _widgetsService; // Используйте интерфейс для лучшей абстракции
+    private readonly IWidgetsService _widgetsService; // РСЃРїРѕР»СЊР·СѓР№С‚Рµ РёРЅС‚РµСЂС„РµР№СЃ РґР»СЏ Р»СѓС‡С€РµР№ Р°Р±СЃС‚СЂР°РєС†РёРё
     private readonly UserManager<IdentityUser> _userManager;
 
     /// <summary>
-    /// Инъекция зависимостей через конструктор.
+    /// РРЅСЉРµРєС†РёСЏ Р·Р°РІРёСЃРёРјРѕСЃС‚РµР№ С‡РµСЂРµР· РєРѕРЅСЃС‚СЂСѓРєС‚РѕСЂ.
     /// </summary>
-    /// <param name="widgetsService">Сервис для работы с виджетами.</param>
-    /// <param name="userManager">Менеджер пользователей.</param>
+    /// <param name="widgetsService">РЎРµСЂРІРёСЃ РґР»СЏ СЂР°Р±РѕС‚С‹ СЃ РІРёРґР¶РµС‚Р°РјРё.</param>
+    /// <param name="userManager">РњРµРЅРµРґР¶РµСЂ РїРѕР»СЊР·РѕРІР°С‚РµР»РµР№.</param>
     public WidgetsController(IWidgetsService widgetsService, UserManager<IdentityUser> userManager)
     {
         _widgetsService = widgetsService;
@@ -24,7 +25,7 @@ public class WidgetsController : ControllerBase
     }
 
 
-    // Получить все виджеты
+    // РџРѕР»СѓС‡РёС‚СЊ РІСЃРµ РІРёРґР¶РµС‚С‹
     [HttpGet]
     [Authorize]
     public async Task<IActionResult> GetAll()
@@ -37,9 +38,28 @@ public class WidgetsController : ControllerBase
     }
 
     [HttpPut]
-    public IActionResult UpdateWidgets([FromBody] List<MainWidget> updatedWidgets)
+    [Authorize]
+    public async Task<IActionResult> UpdateWidgets([FromBody] List<UpdateMainWidgetDto> updatedWidgets)
     {
+        var userId = _userManager.GetUserId(User);
+        if (string.IsNullOrWhiteSpace(userId))
+            return Unauthorized();
 
+        if (updatedWidgets.Count == 0)
+            return NoContent();
+
+        var widgetsToUpdate = updatedWidgets.Select(widget => new Application.Modules.Widgets.MainWidget
+        {
+            Id = widget.Id,
+            Order = widget.Order,
+            Name = widget.Name,
+            Icon = widget.Icon,
+            Size = widget.Size,
+            Hide = widget.Hide,
+            UserId = userId
+        }).ToList();
+
+        await _widgetsService.UpdateWidgetsAsync(widgetsToUpdate, userId);
         return NoContent();
     }
 }
