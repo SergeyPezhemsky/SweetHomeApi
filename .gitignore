@@ -1,0 +1,41 @@
+# Build artifacts
+bin/
+obj/
+artifacts/
+out/
+publish/
+
+# Logs
+*.log
+logs/
+
+# Test artifacts
+TestResults/
+*.trx
+*.coverage
+*.coveragexml
+
+# IDE and editor files
+.idea/
+.vs/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+*.iml
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# NuGet
+*.nupkg
+*.snupkg
+packages/
+
+# Local secrets and machine-specific config
+appsettings.Development.local.json
+appsettings.Local.json
+.env
+.env.*

@@ -1,0 +1,28 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SweetHomeApi", "SweetHomeApi\SweetHomeApi.csproj", "{0F5CBC19-E11A-4DCA-BB1B-88507D750209}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Application", "Application\Application.csproj", "{57F53EF5-2B21-4068-BF3F-374BD8121E1F}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Persistance", "Persistance\Persistance.csproj", "{834091DF-1235-4700-8551-A245B5260ADD}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{0F5CBC19-E11A-4DCA-BB1B-88507D750209}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{0F5CBC19-E11A-4DCA-BB1B-88507D750209}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{0F5CBC19-E11A-4DCA-BB1B-88507D750209}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{0F5CBC19-E11A-4DCA-BB1B-88507D750209}.Release|Any CPU.Build.0 = Release|Any CPU
+		{57F53EF5-2B21-4068-BF3F-374BD8121E1F}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{57F53EF5-2B21-4068-BF3F-374BD8121E1F}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{57F53EF5-2B21-4068-BF3F-374BD8121E1F}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{57F53EF5-2B21-4068-BF3F-374BD8121E1F}.Release|Any CPU.Build.0 = Release|Any CPU
+		{834091DF-1235-4700-8551-A245B5260ADD}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{834091DF-1235-4700-8551-A245B5260ADD}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{834091DF-1235-4700-8551-A245B5260ADD}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{834091DF-1235-4700-8551-A245B5260ADD}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+EndGlobal
