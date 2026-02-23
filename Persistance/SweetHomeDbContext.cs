@@ -1,4 +1,5 @@
-﻿using Application.Modules.Widgets;
+﻿using Application.Modules.Health;
+using Application.Modules.Widgets;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
@@ -25,8 +26,23 @@ public class SweetHomeDbContext(DbContextOptions<SweetHomeDbContext> options)
                 .HasForeignKey(e => e.UserId) // Внешний ключ
                 .OnDelete(DeleteBehavior.Cascade); // Удаление виджетов при удалении пользователя
         });
+
+        builder.Entity<HealthEntry>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+
+            entity.HasIndex(e => new { e.UserId, e.Date })
+                .IsUnique();
+
+            entity
+                .HasOne(e => e.User)
+                .WithMany()
+                .HasForeignKey(e => e.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
     }
 
 
     public DbSet<MainWidget> MainWidgets { get; set; }
+    public DbSet<HealthEntry> HealthEntries { get; set; }
 }
