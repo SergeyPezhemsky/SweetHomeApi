@@ -9,6 +9,7 @@ public static class DefaultMainWidgets
             new MainWidget
             {
                 Id = Guid.NewGuid().ToString(),
+                Alias = "home",
                 Order = 1,
                 Name = "Дом",
                 Icon = "home",
@@ -19,6 +20,7 @@ public static class DefaultMainWidgets
             new MainWidget
             {
                 Id = Guid.NewGuid().ToString(),
+                Alias = "movies",
                 Order = 2,
                 Name = "Кино",
                 Icon = "movie",
@@ -29,6 +31,7 @@ public static class DefaultMainWidgets
             new MainWidget
             {
                 Id = Guid.NewGuid().ToString(),
+                Alias = "books",
                 Order = 3,
                 Name = "Книги",
                 Icon = "book",
@@ -39,6 +42,7 @@ public static class DefaultMainWidgets
             new MainWidget
             {
                 Id = Guid.NewGuid().ToString(),
+                Alias = "trips",
                 Order = 4,
                 Name = "Путешествия",
                 Icon = "public",
@@ -49,19 +53,21 @@ public static class DefaultMainWidgets
             new MainWidget
             {
                 Id = Guid.NewGuid().ToString(),
-                Order = 5,
-                Name = "ТЕСТ",
-                Icon = "home",
-                Size = 1,
-                Hide = true,
+                Alias = "coins",
+                Order = 6,
+                Name = "Монеты",
+                Icon = "toll",
+                Size = 3,
+                Hide = false,
                 UserId = userId
             },
             new MainWidget
             {
                 Id = Guid.NewGuid().ToString(),
-                Order = 6,
-                Name = "Монеты",
-                Icon = "toll",
+                Alias = "health",
+                Order = 7,
+                Name = "Здоровье",
+                Icon = "health_and_safety",
                 Size = 3,
                 Hide = false,
                 UserId = userId

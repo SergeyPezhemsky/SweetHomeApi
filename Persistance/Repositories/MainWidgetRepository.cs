@@ -21,6 +21,7 @@ public class MainWidgetRepository(SweetHomeDbContext context) : IMainWidgetRepos
 
             if (existingWidget != null)
             {
+                existingWidget.Alias = widget.Alias;
                 existingWidget.Order = widget.Order;
                 existingWidget.Name = widget.Name;
                 existingWidget.Icon = widget.Icon;

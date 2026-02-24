@@ -65,7 +65,7 @@ public class HealthController(IHealthService healthService, UserManager<Identity
         if (string.IsNullOrWhiteSpace(userId))
             return Unauthorized();
 
-        if (!TryParseDate(dto.Data, out var date))
+        if (!TryParseDate(dto.Date, out var date))
             return BadRequest("Неверный формат даты. Используйте dd.MM.yyyy или yyyy-MM-dd.");
 
         var existingData = await healthService.GetByDateAsync(userId, date);

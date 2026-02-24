@@ -4,8 +4,7 @@ namespace SweetHomeApi.Controllers.Health.Dto;
 
 public class UpdateHealthDto
 {
-    [JsonPropertyName("data")]
-    public required string Data { get; set; }
+    public required string Date { get; set; }
 
     public List<HealthDictionaryItemDto>? HealthDictionary { get; set; }
     public string? Weight { get; set; }

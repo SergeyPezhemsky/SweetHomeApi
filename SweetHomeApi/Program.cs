@@ -2,6 +2,7 @@
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -20,9 +21,29 @@ builder.Services.RegisterApplicationServices();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AllowSpecificOrigin",
+        policy =>
+        {
+            policy.WithOrigins(
+                    "http://localhost:4200",
+                    "https://localhost:4200",
+                    "http://127.0.0.1:4200",
+                    "https://127.0.0.1:4200",
+                    "http://87.242.102.150",
+                    "https://87.242.102.150")
+                .AllowAnyHeader()
+                .AllowAnyMethod()
+                .AllowCredentials();
+        });
+});
+
+
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
 builder.Services.AddDbContext<SweetHomeDbContext>(options =>
     options.UseNpgsql(connectionString)
+        .ConfigureWarnings(warnings => warnings.Ignore(RelationalEventId.PendingModelChangesWarning))
 );
 
 builder.Services.AddIdentity<IdentityUser, IdentityRole>()
@@ -50,6 +71,7 @@ builder.Services.ConfigureApplicationCookie(options =>
 
 var app = builder.Build();
 app.UseRouting();
+app.UseCors("AllowSpecificOrigin");
 
 // Включаем Swagger и его пользовательский интерфейс
 //if (app.Environment.IsDevelopment())

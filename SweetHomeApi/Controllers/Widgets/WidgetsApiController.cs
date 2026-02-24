@@ -30,7 +30,8 @@ public class WidgetsController : ControllerBase
     [Authorize]
     public async Task<IActionResult> GetAll()
     {
-        var userId = _userManager.GetUserId(User);
+         var userId = _userManager.GetUserId(User);
+
         if (string.IsNullOrWhiteSpace(userId))
             return Unauthorized();
 
@@ -42,6 +43,7 @@ public class WidgetsController : ControllerBase
     public async Task<IActionResult> UpdateWidgets([FromBody] List<UpdateMainWidgetDto> updatedWidgets)
     {
         var userId = _userManager.GetUserId(User);
+
         if (string.IsNullOrWhiteSpace(userId))
             return Unauthorized();
 
@@ -51,6 +53,7 @@ public class WidgetsController : ControllerBase
         var widgetsToUpdate = updatedWidgets.Select(widget => new Application.Modules.Widgets.MainWidget
         {
             Id = widget.Id,
+            Alias = widget.Alias,
             Order = widget.Order,
             Name = widget.Name,
             Icon = widget.Icon,
