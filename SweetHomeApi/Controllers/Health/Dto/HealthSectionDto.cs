@@ -8,5 +8,6 @@ public class HealthSectionDto
     public required bool Hide { get; set; }
     public required string Type { get; set; }
     public required bool Dictionary { get; set; }
-    public string? DefaultValue { get; set; }
+    public required bool  AverageValue { get; set; }
 }
+ 

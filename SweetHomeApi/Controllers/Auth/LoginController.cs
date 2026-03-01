@@ -23,8 +23,8 @@ namespace SweetHomeApi.Controllers.Auth
         }
 
 
-        [HttpPost]
-        [Route("Account/Login")]
+        [HttpPost("api/Account/Login")]
+        [HttpPost("Account/Login")]
         public async Task<IActionResult> Login([FromBody] LoginRequest loginRequest)
         {
             if (!ModelState.IsValid)

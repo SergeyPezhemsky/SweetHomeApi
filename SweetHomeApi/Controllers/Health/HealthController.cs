@@ -35,11 +35,11 @@ public class HealthController(IHealthService healthService, UserManager<Identity
                 Hide = x.Hide,
                 Type = x.Type,
                 Dictionary = x.Dictionary,
-                DefaultValue = x.DefaultValue
+                AverageValue = x.AverageValue,
             }).ToList(),
             Health = new HealthDto
             {
-                Data = health.Date.ToString("dd.MM.yyyy"),
+                Date = health.Date.ToString("dd.MM.yyyy"),
                 HealthDictionary = health.HealthDictionary.Select(x => new HealthDictionaryItemDto
                 {
                     Id = x.Id,
@@ -91,7 +91,7 @@ public class HealthController(IHealthService healthService, UserManager<Identity
         };
 
         await healthService.UpsertAsync(userId, data);
-        return NoContent();
+        return await Get(dto.Date);
     }
 
     private static bool TryParseDate(string? input, out DateOnly date)
