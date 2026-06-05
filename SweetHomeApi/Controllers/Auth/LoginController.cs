@@ -1,4 +1,5 @@
 ﻿using Application.Modules.Widgets;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using SweetHomeApi.Controllers.Auth.Dto;
@@ -29,12 +30,19 @@ namespace SweetHomeApi.Controllers.Auth
         {
             if (!ModelState.IsValid)
                 return BadRequest(ModelState);
+            
+            var user = await _userManager.FindByEmailAsync(loginRequest.Email);
+            
+            if (user == null || user.UserName == null)
+            {
+                return Unauthorized(new { Message = "Пользователь не найден" });
+            }
 
             var result =
-                await _signInManager.PasswordSignInAsync(loginRequest.Email, loginRequest.Password, false, false);
+                await _signInManager.PasswordSignInAsync(user.UserName, loginRequest.Password, false, false);
 
             if (result.Succeeded)
-                return Ok(new { Message = "Успешный вход" });
+                return Ok(new { Message = "Успешный вход", Name = user.UserName });
 
             return Unauthorized(new { Message = "Неверный логин или пароль" });
         }
@@ -47,21 +55,28 @@ namespace SweetHomeApi.Controllers.Auth
             {
                 return BadRequest(ModelState);
             }
+            
+            var user = await _userManager.FindByEmailAsync(model.Email);
+            
+            if (user != null)
+            {
+                return BadRequest("Пользователь уже зарегестрирован");;
+            }
 
             // Создаем нового пользователя
-            var user = new IdentityUser
+            var newUser = new IdentityUser
             {
-                UserName = model.Email,
+                UserName = model.Name,
                 Email = model.Email
             };
 
             // Пытаемся создать пользователя
-            var result = await _userManager.CreateAsync(user, model.Password);
+            var result = await _userManager.CreateAsync(newUser, model.Password);
             if (result.Succeeded)
             {
                 // После успешной регистрации, можно автоматически залогинить пользователя, если требуется
-                await _widgetsService.AddDefaultWidgetForUser(user.Id);
-                await _signInManager.SignInAsync(user, isPersistent: false);
+                await _widgetsService.AddDefaultWidgetForUser(newUser.Id);
+                await _signInManager.SignInAsync(newUser, isPersistent: false);
                 return Ok(new { message = "Пользователь успешно зарегистрирован" });
             }
 
@@ -71,6 +86,16 @@ namespace SweetHomeApi.Controllers.Auth
                 ModelState.AddModelError("", error.Description);
             }
             return BadRequest(ModelState); // Возвращаем ошибки валидации
+        }
+
+        [HttpGet]
+        [Authorize]
+        [Route("api/Account/User")]
+        public async Task<IActionResult> GetCurrentUser()
+        {
+            var username = _userManager.GetUserName(User);
+            
+            return Ok(new { name = username });
         }
 
 

@@ -39,3 +39,13 @@ appsettings.Development.local.json
 appsettings.Local.json
 .env
 .env.*
+!.env.example
+openvpn
+
+# Deployment secrets and generated packages
+_deploy/id_rsa
+_deploy/*.ovpn
+_deploy/*.zip
+_deploy/publish/
+
+scripts/

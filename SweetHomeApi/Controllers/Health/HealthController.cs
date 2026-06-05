@@ -13,23 +13,23 @@ public class HealthController(IHealthService healthService, UserManager<Identity
 {
     [HttpGet]
     [Authorize]
-    public async Task<IActionResult> Get([FromQuery] string? data)
+    public async Task<IActionResult> Get([FromQuery] string? date)
     {
         var userId = userManager.GetUserId(User);
         if (string.IsNullOrWhiteSpace(userId))
             return Unauthorized();
 
-        if (!TryParseDate(data, out var date))
+        if (!TryParseDate(date, out var outDate))
             return BadRequest("Неверный формат даты. Используйте dd.MM.yyyy или yyyy-MM-dd.");
 
         var sections = await healthService.GetSectionsAsync();
-        var health = await healthService.GetByDateAsync(userId, date);
+        var health = await healthService.GetByDateAsync(userId, outDate);
 
         return Ok(new HealthResponseDto
         {
             HealthSections = sections.Select(x => new HealthSectionDto
             {
-                Id = x.Id,
+                Alias = x.Id,
                 Order = x.Order,
                 Name = x.Name,
                 Hide = x.Hide,
@@ -96,12 +96,6 @@ public class HealthController(IHealthService healthService, UserManager<Identity
 
     private static bool TryParseDate(string? input, out DateOnly date)
     {
-        if (string.IsNullOrWhiteSpace(input))
-        {
-            date = DateOnly.FromDateTime(DateTime.UtcNow.Date);
-            return true;
-        }
-
         return DateOnly.TryParseExact(input, "dd.MM.yyyy", CultureInfo.InvariantCulture, DateTimeStyles.None, out date)
                || DateOnly.TryParseExact(input, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out date);
     }
