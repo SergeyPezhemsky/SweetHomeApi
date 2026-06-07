@@ -1,75 +1,100 @@
 # Docker deploy
 
-## Что добавлено
+## Схема
 
-- `Dockerfile` собирает `SweetHomeApi` в production-образ на .NET 9.
-- `docker-compose.yml` поднимает API и PostgreSQL.
-- `.env.example` показывает переменные для VPS.
-- `.github/workflows/docker-image.yml` публикует образ в GitHub Container Registry.
-
-## Публикация образа
-
-После push в ветку `main` GitHub Actions соберет и опубликует образ:
+Основной деплой работает без registry:
 
 ```text
-ghcr.io/<github-owner>/<repo-name>:latest
+push в master -> GitHub Actions -> SSH на VPS -> git pull/reset -> docker compose up -d --build
 ```
 
-Например:
+Готовый Docker image никуда не публикуется. Он собирается прямо на VPS из `Dockerfile`.
 
-```text
-ghcr.io/your-github-username/sweethomeapi:latest
-```
+## Подготовка VPS
 
-Если репозиторий или package приватный, на VPS нужен login в `ghcr.io` через GitHub token с правом `read:packages`.
+Один раз установи на VPS:
+
+- Docker Engine
+- Docker Compose plugin
+- Git
+
+Потом склонируй проект:
 
 ```bash
-docker login ghcr.io -u <github-username>
-```
-
-## Первый запуск на VPS
-
-Установи Docker и Docker Compose plugin, затем положи на VPS файлы:
-
-- `docker-compose.yml`
-- `.env`
-
-Создай `.env` из примера:
-
-```bash
+git clone https://github.com/SergeyPezhemsky/SweetHomeApi.git /opt/sweethome-api
+cd /opt/sweethome-api
 cp .env.example .env
 ```
 
-В `.env` замени:
+В `.env` задай нормальный пароль:
 
 ```text
-SWEETHOME_API_IMAGE=ghcr.io/<github-owner>/<repo-name>:latest
 POSTGRES_PASSWORD=<strong-password>
 ```
 
-Запуск:
+Первый ручной запуск:
 
 ```bash
-docker compose pull
-docker compose up -d
+docker compose up -d --build
 ```
 
-API будет доступен на порту `5000` хоста. Текущий nginx-конфиг из `_deploy/sweethome-api.nginx.conf` уже проксирует API на `127.0.0.1:5000`.
+API будет слушать порт VPS из `API_PORT`, по умолчанию `5000`.
 
-## Обновление на VPS
+## SSH ключ для GitHub Actions
 
-После нового push в `main` и успешной GitHub Actions сборки:
+На своей машине или на VPS создай отдельный ключ для деплоя:
 
 ```bash
-docker compose pull
-docker compose up -d
+ssh-keygen -t ed25519 -C "github-actions-sweethome" -f sweethome_deploy_key
 ```
 
-## Локальный запуск
+Публичный ключ `sweethome_deploy_key.pub` добавь на VPS в:
 
-Для локальной проверки с Docker:
+```text
+~/.ssh/authorized_keys
+```
+
+Приватный ключ `sweethome_deploy_key` добавь в GitHub repository secrets.
+
+## GitHub secrets
+
+В GitHub открой:
+
+```text
+Repository -> Settings -> Secrets and variables -> Actions -> New repository secret
+```
+
+Добавь:
+
+```text
+VPS_HOST=<ip-or-domain>
+VPS_USER=<ssh-user>
+VPS_PORT=22
+VPS_SSH_KEY=<private-ssh-key>
+VPS_APP_DIR=/opt/sweethome-api
+```
+
+## Автодеплой
+
+Workflow `.github/workflows/deploy-vps.yml` запускается после каждого push в `master` и выполняет на VPS:
 
 ```bash
-cp .env.example .env
-docker compose up --build
+cd "$VPS_APP_DIR"
+git fetch origin master
+git reset --hard origin/master
+docker compose up -d --build
+docker image prune -f
+```
+
+## Проверка на VPS
+
+```bash
+docker compose ps
+docker compose logs -f api
+```
+
+Если nginx использует текущий конфиг из `_deploy/sweethome-api.nginx.conf`, он проксирует API на:
+
+```text
+http://127.0.0.1:5000
 ```
