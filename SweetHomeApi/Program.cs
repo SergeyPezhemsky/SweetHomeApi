@@ -6,7 +6,9 @@ using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Application.Modules.HomeAssistant;
 using Persistance;
+using SweetHomeApi.Infrastructure.HomeAssistant;
 using SweetHomeApi.Registration;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -17,6 +19,8 @@ builder.Services.AddControllers();
 
 builder.Services.RegisterRepositories();
 builder.Services.RegisterApplicationServices();
+builder.Services.Configure<HomeAssistantOptions>(builder.Configuration.GetSection("HomeAssistant"));
+builder.Services.AddHttpClient<IHomeAssistantClient, HomeAssistantClient>();
 
 // Добавляем сервисы Swagger
 builder.Services.AddEndpointsApiExplorer();

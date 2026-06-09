@@ -9,6 +9,8 @@ services:
       ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Production}
       ASPNETCORE_URLS: http://+:8080
       ConnectionStrings__DefaultConnection: Host=postgres;Port=5432;Database=${POSTGRES_DB};Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
+      HomeAssistant__BaseUrl: ${HOMEASSISTANT_BASE_URL}
+      HomeAssistant__AccessToken: ${HOMEASSISTANT_ACCESS_TOKEN}
     ports:
       - "${API_PORT:-5000}:8080"
     depends_on:
