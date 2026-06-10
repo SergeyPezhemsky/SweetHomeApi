@@ -1,4 +1,5 @@
-﻿using Application.Modules.Health;
+using Application.Modules.Health;
+using Application.Modules.SmartHome;
 using Application.Modules.Widgets;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
@@ -14,17 +15,15 @@ public class SweetHomeDbContext(DbContextOptions<SweetHomeDbContext> options)
     {
         base.OnModelCreating(builder);
 
-        // Конфигурация MainWidget
         builder.Entity<MainWidget>(entity =>
         {
-            entity.HasKey(e => e.Id); // Установка первичного ключа
+            entity.HasKey(e => e.Id);
 
-            // Связь MainWidget с таблицей пользователей через UserId
             entity
-                .HasOne(e => e.User) // Навигационное свойство
-                .WithMany() // Одному пользователю соответствует множество виджетов
-                .HasForeignKey(e => e.UserId) // Внешний ключ
-                .OnDelete(DeleteBehavior.Cascade); // Удаление виджетов при удалении пользователя
+                .HasOne(e => e.User)
+                .WithMany()
+                .HasForeignKey(e => e.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
 
         builder.Entity<HealthEntry>(entity =>
@@ -40,9 +39,43 @@ public class SweetHomeDbContext(DbContextOptions<SweetHomeDbContext> options)
                 .HasForeignKey(e => e.UserId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
-    }
 
+        builder.Entity<SmartHomeRoom>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+
+            entity.HasIndex(e => e.UserId);
+
+            entity
+                .HasOne(e => e.User)
+                .WithMany()
+                .HasForeignKey(e => e.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<SmartHomeWidget>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+
+            entity.HasIndex(e => e.UserId);
+            entity.HasIndex(e => e.RoomId);
+
+            entity
+                .HasOne(e => e.User)
+                .WithMany()
+                .HasForeignKey(e => e.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity
+                .HasOne(e => e.Room)
+                .WithMany()
+                .HasForeignKey(e => e.RoomId)
+                .OnDelete(DeleteBehavior.SetNull);
+        });
+    }
 
     public DbSet<MainWidget> MainWidgets { get; set; }
     public DbSet<HealthEntry> HealthEntries { get; set; }
+    public DbSet<SmartHomeRoom> SmartHomeRooms { get; set; }
+    public DbSet<SmartHomeWidget> SmartHomeWidgets { get; set; }
 }
