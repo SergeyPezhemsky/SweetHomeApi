@@ -11,6 +11,7 @@ services:
       ConnectionStrings__DefaultConnection: Host=postgres;Port=5432;Database=${POSTGRES_DB};Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
       HomeAssistant__BaseUrl: ${HOMEASSISTANT_BASE_URL}
       HomeAssistant__AccessToken: ${HOMEASSISTANT_ACCESS_TOKEN}
+      HomeAssistant__RequestTimeoutSeconds: ${HOMEASSISTANT_REQUEST_TIMEOUT_SECONDS:-60}
     ports:
       - "${API_PORT:-5000}:8080"
     depends_on:
