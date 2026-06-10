@@ -1,4 +1,5 @@
 using System.Net.Http.Headers;
+using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Application.Modules.HomeAssistant;
@@ -60,6 +61,27 @@ public class HomeAssistantClient : IHomeAssistantClient
                 Attributes = state.Attributes ?? new Dictionary<string, JsonElement>()
             })
             .ToList() ?? [];
+    }
+
+    public async Task CallServiceAsync(
+        string domain,
+        string service,
+        IReadOnlyDictionary<string, object?> data,
+        CancellationToken cancellationToken)
+    {
+        EnsureConfigured();
+
+        using var request = CreateRequest(HttpMethod.Post, $"api/services/{domain}/{service}");
+        request.Content = JsonContent.Create(data, options: JsonSerializerOptions);
+
+        using var response = await _httpClient.SendAsync(request, cancellationToken);
+
+        if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+        {
+            throw new HomeAssistantException("Home Assistant token is invalid or expired.");
+        }
+
+        response.EnsureSuccessStatusCode();
     }
 
     private HttpRequestMessage CreateRequest(HttpMethod method, string path)

@@ -48,4 +48,82 @@ public class SmartHomeRepository(SweetHomeDbContext context) : ISmartHomeReposit
 
         await context.SaveChangesAsync(cancellationToken);
     }
+
+    public async Task<IReadOnlyList<SmartHomeScenario>> GetScenariosAsync(
+        string userId,
+        CancellationToken cancellationToken)
+    {
+        return await context.Set<SmartHomeScenario>()
+            .Where(scenario => scenario.UserId == userId)
+            .OrderBy(scenario => scenario.Name)
+            .ToListAsync(cancellationToken);
+    }
+
+    public Task<SmartHomeScenario?> GetScenarioAsync(
+        string scenarioId,
+        string userId,
+        CancellationToken cancellationToken)
+    {
+        return context.Set<SmartHomeScenario>()
+            .FirstOrDefaultAsync(
+                scenario => scenario.Id == scenarioId && scenario.UserId == userId,
+                cancellationToken);
+    }
+
+    public async Task AddScenarioAsync(SmartHomeScenario scenario, CancellationToken cancellationToken)
+    {
+        await context.Set<SmartHomeScenario>().AddAsync(scenario, cancellationToken);
+        await context.SaveChangesAsync(cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<SmartHomeAutomation>> GetAutomationsAsync(
+        string userId,
+        CancellationToken cancellationToken)
+    {
+        return await context.Set<SmartHomeAutomation>()
+            .Where(automation => automation.UserId == userId)
+            .OrderBy(automation => automation.Name)
+            .ToListAsync(cancellationToken);
+    }
+
+    public Task<SmartHomeAutomation?> GetAutomationAsync(
+        string automationId,
+        string userId,
+        CancellationToken cancellationToken)
+    {
+        return context.Set<SmartHomeAutomation>()
+            .FirstOrDefaultAsync(
+                automation => automation.Id == automationId && automation.UserId == userId,
+                cancellationToken);
+    }
+
+    public async Task AddAutomationAsync(SmartHomeAutomation automation, CancellationToken cancellationToken)
+    {
+        await context.Set<SmartHomeAutomation>().AddAsync(automation, cancellationToken);
+        await context.SaveChangesAsync(cancellationToken);
+    }
+
+    public Task UpdateAutomationAsync(SmartHomeAutomation automation, CancellationToken cancellationToken)
+    {
+        context.Set<SmartHomeAutomation>().Update(automation);
+        return context.SaveChangesAsync(cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<SmartHomeEvent>> GetEventsAsync(
+        string userId,
+        int take,
+        CancellationToken cancellationToken)
+    {
+        return await context.Set<SmartHomeEvent>()
+            .Where(smartHomeEvent => smartHomeEvent.UserId == userId)
+            .OrderByDescending(smartHomeEvent => smartHomeEvent.CreatedAt)
+            .Take(take)
+            .ToListAsync(cancellationToken);
+    }
+
+    public async Task AddEventAsync(SmartHomeEvent smartHomeEvent, CancellationToken cancellationToken)
+    {
+        await context.Set<SmartHomeEvent>().AddAsync(smartHomeEvent, cancellationToken);
+        await context.SaveChangesAsync(cancellationToken);
+    }
 }

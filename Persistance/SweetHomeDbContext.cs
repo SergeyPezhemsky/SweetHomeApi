@@ -72,10 +72,53 @@ public class SweetHomeDbContext(DbContextOptions<SweetHomeDbContext> options)
                 .HasForeignKey(e => e.RoomId)
                 .OnDelete(DeleteBehavior.SetNull);
         });
+
+        builder.Entity<SmartHomeScenario>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+
+            entity.HasIndex(e => e.UserId);
+
+            entity
+                .HasOne(e => e.User)
+                .WithMany()
+                .HasForeignKey(e => e.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<SmartHomeAutomation>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+
+            entity.HasIndex(e => e.UserId);
+
+            entity
+                .HasOne(e => e.User)
+                .WithMany()
+                .HasForeignKey(e => e.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<SmartHomeEvent>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+
+            entity.HasIndex(e => e.UserId);
+            entity.HasIndex(e => e.CreatedAt);
+
+            entity
+                .HasOne(e => e.User)
+                .WithMany()
+                .HasForeignKey(e => e.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
     }
 
     public DbSet<MainWidget> MainWidgets { get; set; }
     public DbSet<HealthEntry> HealthEntries { get; set; }
     public DbSet<SmartHomeRoom> SmartHomeRooms { get; set; }
     public DbSet<SmartHomeWidget> SmartHomeWidgets { get; set; }
+    public DbSet<SmartHomeScenario> SmartHomeScenarios { get; set; }
+    public DbSet<SmartHomeAutomation> SmartHomeAutomations { get; set; }
+    public DbSet<SmartHomeEvent> SmartHomeEvents { get; set; }
 }
