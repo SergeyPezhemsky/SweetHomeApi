@@ -1,12 +1,12 @@
 # Home Assistant Client API
 
-Документ описывает API, нужное клиенту для реализации экрана умного дома: получение каталога сущностей Home Assistant, сохранение комнат и пользовательских виджетов, получение сохраненной раскладки.
+Документ описывает API для клиентского экрана умного дома: каталог сущностей Home Assistant, сохранение комнат, сохранение пользовательских виджетов и явный контракт для выбора UI-контролов.
 
 ## Общие правила
 
-- Base URL: тот же backend SweetHomeApi.
+- Base URL: backend SweetHomeApi.
 - Авторизация: cookie-based ASP.NET Identity.
-- Для браузерных запросов обязательно отправлять cookies:
+- Для браузерных запросов отправлять cookies:
 
 ```ts
 fetch(url, {
@@ -17,19 +17,20 @@ fetch(url, {
 - Все endpoints ниже требуют авторизацию.
 - Неавторизованный пользователь получает `401 Unauthorized`.
 - JSON использует `camelCase`.
-- `id` комнат и сохраненных виджетов генерирует клиент. Рекомендуется использовать UUID.
+- `id` комнат и сохраненных виджетов генерирует клиент. Рекомендуется UUID.
 
-## Поток клиента
+## Клиентский поток
 
 1. Войти или зарегистрироваться через существующий auth API.
-2. Вызвать `GET /api/SmartHome/widget-catalog`, чтобы получить доступные сущности Home Assistant.
-3. Дать пользователю выбрать сущности и создать из них локальные виджеты.
-4. Сохранить комнаты и виджеты через `PUT /api/SmartHome/layout`.
-5. При открытии экрана получать сохраненную раскладку через `GET /api/SmartHome/layout`.
+2. Вызвать `GET /api/SmartHome/widget-catalog`.
+3. Показать пользователю каталог доступных HA-сущностей.
+4. Создать локальные виджеты из выбранных catalog items.
+5. Сохранить комнаты и виджеты через `PUT /api/SmartHome/layout`.
+6. При открытии экрана получить сохраненную раскладку через `GET /api/SmartHome/layout`.
 
 ## GET /api/SmartHome/widget-catalog
 
-Возвращает live-каталог поддерживаемых сущностей из Home Assistant. Эти данные не являются пользовательской раскладкой, а только источником для выбора виджетов.
+Возвращает live-каталог поддерживаемых сущностей Home Assistant. Это не сохраненная пользовательская раскладка, а источник для выбора виджетов.
 
 ### Response 200
 
@@ -41,11 +42,41 @@ fetch(url, {
     "name": "Living Room Main",
     "icon": "lightbulb",
     "source": "homeAssistant",
+    "displayType": "toggleSlider",
     "unit": null,
     "state": "on",
     "lastChanged": "2026-06-10T08:20:15.123456+00:00",
     "lastUpdated": "2026-06-10T08:25:40.123456+00:00",
     "capabilities": ["turnOn", "turnOff", "toggle", "brightness", "color"],
+    "controls": [
+      {
+        "type": "toggle",
+        "action": "toggle",
+        "label": "Toggle",
+        "min": null,
+        "max": null,
+        "step": null,
+        "unit": null
+      },
+      {
+        "type": "slider",
+        "action": "brightness",
+        "label": "Brightness",
+        "min": 0,
+        "max": 255,
+        "step": 1,
+        "unit": null
+      },
+      {
+        "type": "colorPicker",
+        "action": "color",
+        "label": "Color",
+        "min": null,
+        "max": null,
+        "step": null,
+        "unit": null
+      }
+    ],
     "attributes": {
       "friendly_name": "Living Room Main",
       "supported_color_modes": ["brightness", "color_temp"]
@@ -54,34 +85,73 @@ fetch(url, {
 ]
 ```
 
-### Catalog widget fields
+### Catalog fields
 
 | Field | Type | Description |
 | --- | --- | --- |
-| `id` | string | Home Assistant `entity_id`. Используется как `entityId` при создании сохраненного виджета. |
-| `type` | string | Домен Home Assistant: `light`, `switch`, `sensor`, `binary_sensor`, `climate`, `cover`, `scene`, `script`, `media_player`. |
-| `name` | string | Человекочитаемое имя из `friendly_name` или fallback на `entity_id`. |
-| `icon` | string | Иконка из HA attribute `icon` или дефолт backend. |
+| `id` | string | Home Assistant `entity_id`. При сохранении виджета копировать в `entityId`. |
+| `type` | string | Домен HA: `light`, `switch`, `sensor`, `binary_sensor`, `climate`, `cover`, `scene`, `script`, `media_player`. |
+| `name` | string | Имя из `friendly_name` или fallback на `entity_id`. |
+| `icon` | string | Иконка карточки. Может быть HA `mdi:*` или backend alias вроде `lightbulb`. |
 | `source` | string | Сейчас всегда `homeAssistant`. |
+| `displayType` | string | Основной тип карточки, по нему фронт выбирает layout виджета. |
 | `unit` | string или null | Единица измерения для sensor-like сущностей. |
 | `state` | string | Текущее состояние HA entity. |
 | `lastChanged` | string | ISO datetime изменения состояния. |
 | `lastUpdated` | string | ISO datetime последнего обновления. |
-| `capabilities` | string[] | Поддерживаемые действия для будущего управления. |
+| `capabilities` | string[] | Список возможностей для логики/доступности действий. |
+| `controls` | `HomeAssistantWidgetControl[]` | Явные UI-контролы, которые фронт должен отрисовать. |
 | `attributes` | object | Raw attributes из Home Assistant. |
 
-### Error responses
+## Как фронту понять, что рисовать
 
-| Status | When |
+Фронт не должен угадывать UI только по `type`. Используйте:
+
+- `displayType` для выбора базовой карточки.
+- `controls[].type` для выбора конкретного UI-элемента.
+- `controls[].action` для будущей команды управления.
+- `icon` для иконки.
+
+### displayType mapping
+
+| `displayType` | Что рисовать |
 | --- | --- |
-| `401` | Пользователь не авторизован. |
-| `502` | Home Assistant недоступен или запрос к нему завершился ошибкой. |
-| `503` | Интеграция Home Assistant не настроена. |
-| `504` | Timeout запроса к Home Assistant. |
+| `toggleSlider` | Карточка устройства с toggle и опциональными slider/color controls. |
+| `toggle` | Карточка-переключатель. |
+| `value` | Read-only карточка значения. |
+| `status` | Read-only карточка статуса. |
+| `thermostat` | Термостат с numeric stepper. |
+| `cover` | Шторы/ворота: open/close/stop. |
+| `actionButton` | Карточка с основной кнопкой действия. |
+| `mediaControls` | Медиа-карточка: кнопки и slider громкости. |
+
+### controls[].type mapping
+
+| `controls[].type` | UI control |
+| --- | --- |
+| `button` | Кнопка. |
+| `toggle` | Switch/toggle. |
+| `slider` | Ползунок, использовать `min`, `max`, `step`, `unit`. |
+| `colorPicker` | Выбор цвета. |
+| `stepper` | Numeric stepper, использовать `min`, `max`, `step`, `unit`. |
+
+### Current backend mapping
+
+| HA type | `displayType` | Controls |
+| --- | --- | --- |
+| `light` | `toggleSlider` | `toggle`, плюс `slider` для brightness и `colorPicker` для цветных ламп. |
+| `switch` | `toggle` | `toggle`. |
+| `sensor` | `value` | Нет controls, только read-only значение. |
+| `binary_sensor` | `status` | Нет controls, только read-only статус. |
+| `climate` | `thermostat` | `stepper` для `setTemperature`. |
+| `cover` | `cover` | `button`: `open`, `close`, `stop`. |
+| `scene` | `actionButton` | `button`: `activate`. |
+| `script` | `actionButton` | `button`: `run`. |
+| `media_player` | `mediaControls` | `button`: on/off/play/pause, `slider`: volume. |
 
 ## GET /api/SmartHome/layout
 
-Возвращает сохраненные комнаты и пользовательские smart-home виджеты текущего пользователя. Данные другого пользователя не возвращаются.
+Возвращает сохраненные комнаты и пользовательские smart-home виджеты текущего пользователя.
 
 ### Response 200
 
@@ -113,7 +183,7 @@ fetch(url, {
 }
 ```
 
-Если раскладка еще не сохранена, backend возвращает пустые массивы:
+Если раскладка еще не сохранена:
 
 ```json
 {
@@ -122,9 +192,11 @@ fetch(url, {
 }
 ```
 
+Важно: сохраненный layout хранит пользовательскую конфигурацию. Для live-state и UI controls клиент должен сверять `widgets[].entityId` с актуальным `GET /api/SmartHome/widget-catalog`.
+
 ## PUT /api/SmartHome/layout
 
-Полностью заменяет сохраненную smart-home раскладку текущего пользователя. Клиент должен отправлять полный актуальный список комнат и виджетов.
+Полностью заменяет сохраненную smart-home раскладку текущего пользователя. Клиент отправляет полный актуальный список комнат и виджетов.
 
 ### Request body
 
@@ -158,18 +230,6 @@ fetch(url, {
       "hide": false,
       "roomId": "8f79b2d7-2d22-4d26-872a-f76fd94a981e",
       "settingsJson": "{\"accentColor\":\"#ffd166\"}"
-    },
-    {
-      "id": "3afa7bf4-cce0-48f9-9c9d-9f7444b37a88",
-      "entityId": "sensor.kitchen_temperature",
-      "type": "sensor",
-      "name": "Температура",
-      "icon": "thermometer",
-      "order": 2,
-      "size": 1,
-      "hide": false,
-      "roomId": "3d4c76be-3c07-418d-bd7f-cf5bbd551d02",
-      "settingsJson": "{}"
     }
   ]
 }
@@ -183,12 +243,23 @@ fetch(url, {
 
 - Backend удаляет старые комнаты и smart-home виджеты текущего пользователя.
 - Затем сохраняет переданные `rooms` и `widgets`.
-- Если `widget.roomId` указывает на комнату, которой нет в текущем request body, backend сохранит `roomId: null`.
+- Если `widget.roomId` указывает на комнату, которой нет в request body, backend сохранит `roomId: null`.
 - `settingsJson` можно не передавать или передать пустым, тогда backend сохранит `{}`.
-- Для удаления комнаты или виджета нужно отправить layout без этого объекта.
-- Для изменения порядка нужно обновить `order` и отправить полный layout.
+- Для удаления комнаты или виджета отправить layout без этого объекта.
 
 ## DTO Reference
+
+### HomeAssistantWidgetControl
+
+| Field | Type | Required | Notes |
+| --- | --- | --- | --- |
+| `type` | string | yes | `button`, `toggle`, `slider`, `colorPicker`, `stepper`. |
+| `action` | string | yes | Action id для будущего endpoint управления. |
+| `label` | string | yes | Display label или fallback для aria-label. |
+| `min` | number или null | no | Для slider/stepper. |
+| `max` | number или null | no | Для slider/stepper. |
+| `step` | number или null | no | Для slider/stepper. |
+| `unit` | string или null | no | Для отображения значения. |
 
 ### SmartHomeLayout
 
@@ -203,8 +274,8 @@ fetch(url, {
 | --- | --- | --- | --- |
 | `id` | string | yes | Stable client-generated id. |
 | `name` | string | yes | Display name. |
-| `icon` | string | yes | Client icon id, for example lucide/material alias. |
-| `order` | number | yes | Sort order inside room list. |
+| `icon` | string | yes | Client icon id. |
+| `order` | number | yes | Sort order. |
 | `hide` | boolean | yes | Hidden state. |
 
 ### SmartHomeWidget
@@ -214,12 +285,12 @@ fetch(url, {
 | `id` | string | yes | Stable client-generated widget id. |
 | `entityId` | string | yes | Home Assistant entity id from catalog `id`. |
 | `type` | string | yes | Usually copied from catalog `type`. |
-| `name` | string | yes | User-facing widget name; can be edited by user. |
-| `icon` | string | yes | Widget icon; can be copied from catalog and edited by user. |
-| `order` | number | yes | Sort order in the UI. |
-| `size` | number | yes | Client-defined tile size. Backend stores the number as-is. |
+| `name` | string | yes | User-facing widget name. |
+| `icon` | string | yes | Widget icon. |
+| `order` | number | yes | Sort order. |
+| `size` | number | yes | Client-defined tile size. |
 | `hide` | boolean | yes | Hidden state. |
-| `roomId` | string или null | no | Must match one of `rooms[].id` to bind widget to a room. |
+| `roomId` | string или null | no | Must match one of `rooms[].id`. |
 | `settingsJson` | string | no | JSON string for client-specific widget settings. |
 
 ## TypeScript Types
@@ -251,17 +322,37 @@ export type SmartHomeWidget = {
   settingsJson?: string | null;
 };
 
+export type HomeAssistantWidgetControl = {
+  type: "button" | "toggle" | "slider" | "colorPicker" | "stepper";
+  action: string;
+  label: string;
+  min?: number | null;
+  max?: number | null;
+  step?: number | null;
+  unit?: string | null;
+};
+
 export type HomeAssistantCatalogWidget = {
   id: string;
   type: string;
   name: string;
   icon: string;
   source: "homeAssistant";
+  displayType:
+    | "toggleSlider"
+    | "toggle"
+    | "value"
+    | "status"
+    | "thermostat"
+    | "cover"
+    | "actionButton"
+    | "mediaControls";
   unit: string | null;
   state: string;
   lastChanged: string;
   lastUpdated: string;
   capabilities: string[];
+  controls: HomeAssistantWidgetControl[];
   attributes: Record<string, unknown>;
 };
 ```
@@ -313,7 +404,7 @@ export async function saveSmartHomeLayout(layout: SmartHomeLayout): Promise<void
 
 ## Current limitations
 
-- API сохраняет выбранные виджеты и комнаты, но пока не выполняет команды управления Home Assistant entity.
-- `settingsJson` не валидируется backend-ом как JSON-объект, это строковое поле для клиента.
-- Backend не проверяет, что `entityId` реально существует в Home Assistant при сохранении layout.
-- Получение live-состояний идет только через `widget-catalog`; сохраненный layout хранит последнюю пользовательскую конфигурацию, а не live-state.
+- API сохраняет выбранные виджеты и комнаты, но пока не выполняет команды управления HA entity.
+- `settingsJson` не валидируется backend-ом как JSON-объект.
+- Backend не проверяет, что `entityId` существует в Home Assistant при сохранении layout.
+- Live-state и controls приходят из `widget-catalog`; сохраненный layout хранит пользовательскую конфигурацию.

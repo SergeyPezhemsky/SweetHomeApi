@@ -14,6 +14,8 @@ public class HomeAssistantCatalogWidget
 
     public required string Source { get; set; }
 
+    public required string DisplayType { get; set; }
+
     public string? Unit { get; set; }
 
     public required string State { get; set; }
@@ -23,6 +25,8 @@ public class HomeAssistantCatalogWidget
     public required DateTimeOffset LastUpdated { get; set; }
 
     public required List<string> Capabilities { get; set; }
+
+    public required List<HomeAssistantWidgetControl> Controls { get; set; }
 
     public Dictionary<string, JsonElement> Attributes { get; set; } = new();
 }

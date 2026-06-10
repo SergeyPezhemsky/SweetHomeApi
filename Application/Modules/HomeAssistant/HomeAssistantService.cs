@@ -43,11 +43,13 @@ public class HomeAssistantService(IHomeAssistantClient homeAssistantClient) : IH
             Name = GetFriendlyName(state),
             Icon = GetIcon(domain, state.Attributes),
             Source = "homeAssistant",
+            DisplayType = GetDisplayType(domain),
             Unit = GetStringAttribute(state.Attributes, "unit_of_measurement"),
             State = state.State,
             LastChanged = state.LastChanged,
             LastUpdated = state.LastUpdated,
             Capabilities = GetCapabilities(domain, state.Attributes),
+            Controls = GetControls(domain, state.Attributes),
             Attributes = state.Attributes
         };
     }
@@ -84,6 +86,23 @@ public class HomeAssistantService(IHomeAssistantClient homeAssistantClient) : IH
         };
     }
 
+    private static string GetDisplayType(string domain)
+    {
+        return domain switch
+        {
+            "light" => "toggleSlider",
+            "switch" => "toggle",
+            "sensor" => "value",
+            "binary_sensor" => "status",
+            "climate" => "thermostat",
+            "cover" => "cover",
+            "scene" => "actionButton",
+            "script" => "actionButton",
+            "media_player" => "mediaControls",
+            _ => "value"
+        };
+    }
+
     private static List<string> GetCapabilities(string domain, IReadOnlyDictionary<string, JsonElement> attributes)
     {
         var capabilities = domain switch
@@ -106,6 +125,96 @@ public class HomeAssistantService(IHomeAssistantClient homeAssistantClient) : IH
         return capabilities;
     }
 
+    private static List<HomeAssistantWidgetControl> GetControls(
+        string domain,
+        IReadOnlyDictionary<string, JsonElement> attributes)
+    {
+        var controls = domain switch
+        {
+            "light" => new List<HomeAssistantWidgetControl>
+            {
+                new() { Type = "toggle", Action = "toggle", Label = "Toggle" }
+            },
+            "switch" => new List<HomeAssistantWidgetControl>
+            {
+                new() { Type = "toggle", Action = "toggle", Label = "Toggle" }
+            },
+            "climate" => new List<HomeAssistantWidgetControl>
+            {
+                new()
+                {
+                    Type = "stepper",
+                    Action = "setTemperature",
+                    Label = "Temperature",
+                    Min = GetDoubleAttribute(attributes, "min_temp"),
+                    Max = GetDoubleAttribute(attributes, "max_temp"),
+                    Step = GetDoubleAttribute(attributes, "target_temp_step") ?? 0.5,
+                    Unit = GetStringAttribute(attributes, "temperature_unit")
+                }
+            },
+            "cover" => new List<HomeAssistantWidgetControl>
+            {
+                new() { Type = "button", Action = "open", Label = "Open" },
+                new() { Type = "button", Action = "close", Label = "Close" },
+                new() { Type = "button", Action = "stop", Label = "Stop" }
+            },
+            "scene" => new List<HomeAssistantWidgetControl>
+            {
+                new() { Type = "button", Action = "activate", Label = "Activate" }
+            },
+            "script" => new List<HomeAssistantWidgetControl>
+            {
+                new() { Type = "button", Action = "run", Label = "Run" }
+            },
+            "media_player" => new List<HomeAssistantWidgetControl>
+            {
+                new() { Type = "button", Action = "turnOn", Label = "On" },
+                new() { Type = "button", Action = "turnOff", Label = "Off" },
+                new() { Type = "button", Action = "play", Label = "Play" },
+                new() { Type = "button", Action = "pause", Label = "Pause" },
+                new() { Type = "slider", Action = "volume", Label = "Volume", Min = 0, Max = 1, Step = 0.01 }
+            },
+            _ => new List<HomeAssistantWidgetControl>()
+        };
+
+        if (domain == "light")
+        {
+            AddLightControls(controls, attributes);
+        }
+
+        return controls;
+    }
+
+    private static void AddLightControls(
+        List<HomeAssistantWidgetControl> controls,
+        IReadOnlyDictionary<string, JsonElement> attributes)
+    {
+        var supportedColorModes = GetStringArrayAttribute(attributes, "supported_color_modes");
+
+        if (supportedColorModes.Any(mode => mode is "brightness" or "color_temp" or "hs" or "rgb" or "rgbw" or "rgbww" or "xy"))
+        {
+            controls.Add(new()
+            {
+                Type = "slider",
+                Action = "brightness",
+                Label = "Brightness",
+                Min = 0,
+                Max = 255,
+                Step = 1
+            });
+        }
+
+        if (supportedColorModes.Any(mode => mode is "color_temp" or "hs" or "rgb" or "rgbw" or "rgbww" or "xy"))
+        {
+            controls.Add(new()
+            {
+                Type = "colorPicker",
+                Action = "color",
+                Label = "Color"
+            });
+        }
+    }
+
     private static void AddLightCapabilities(List<string> capabilities, IReadOnlyDictionary<string, JsonElement> attributes)
     {
         var supportedColorModes = GetStringArrayAttribute(attributes, "supported_color_modes");
@@ -126,6 +235,17 @@ public class HomeAssistantService(IHomeAssistantClient homeAssistantClient) : IH
             return null;
 
         return value.GetString();
+    }
+
+    private static double? GetDoubleAttribute(IReadOnlyDictionary<string, JsonElement> attributes, string name)
+    {
+        if (!attributes.TryGetValue(name, out var value))
+            return null;
+
+        if (value.ValueKind == JsonValueKind.Number && value.TryGetDouble(out var number))
+            return number;
+
+        return null;
     }
 
     private static IReadOnlyList<string> GetStringArrayAttribute(
