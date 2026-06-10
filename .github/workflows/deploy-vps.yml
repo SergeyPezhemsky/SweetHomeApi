@@ -36,76 +36,75 @@ jobs:
                 -addext "subjectAltName=IP:176.109.109.155"
             fi
 
-            sudo tee /etc/nginx/sites-available/sweethome-selfsigned >/dev/null <<'NGINX'
-            server {
-                listen 80 default_server;
-                server_name _;
-                return 301 https://$host$request_uri;
-            }
-
-            server {
-                listen 443 ssl default_server;
-                server_name _;
-
-                ssl_certificate     /etc/ssl/sweethome/selfsigned.crt;
-                ssl_certificate_key /etc/ssl/sweethome/selfsigned.key;
-                ssl_protocols       TLSv1.2 TLSv1.3;
-
-                location /api/ {
-                    proxy_pass http://127.0.0.1:5000;
-                    proxy_http_version 1.1;
-                    proxy_set_header Host $host;
-                    proxy_set_header X-Real-IP $remote_addr;
-                    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-                    proxy_set_header X-Forwarded-Proto $scheme;
-                }
-
-                location /Account/ {
-                    proxy_pass http://127.0.0.1:5000;
-                    proxy_http_version 1.1;
-                    proxy_set_header Host $host;
-                    proxy_set_header X-Real-IP $remote_addr;
-                    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-                    proxy_set_header X-Forwarded-Proto $scheme;
-                }
-
-                location /swagger/ {
-                    proxy_pass http://127.0.0.1:5000;
-                    proxy_http_version 1.1;
-                    proxy_set_header Host $host;
-                    proxy_set_header X-Real-IP $remote_addr;
-                    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-                    proxy_set_header X-Forwarded-Proto $scheme;
-                }
-
-                location / {
-                    proxy_pass http://127.0.0.1:8080;
-                    proxy_http_version 1.1;
-                    proxy_set_header Host $host;
-                    proxy_set_header X-Real-IP $remote_addr;
-                    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-                    proxy_set_header X-Forwarded-Proto $scheme;
-                }
-            }
-
-            server {
-                listen 8443 ssl;
-                server_name _;
-
-                ssl_certificate     /etc/ssl/sweethome/selfsigned.crt;
-                ssl_certificate_key /etc/ssl/sweethome/selfsigned.key;
-                ssl_protocols       TLSv1.2 TLSv1.3;
-
-                location / {
-                    proxy_pass http://127.0.0.1:8090;
-                    proxy_http_version 1.1;
-                    proxy_set_header Host $host;
-                    proxy_set_header X-Real-IP $remote_addr;
-                    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-                    proxy_set_header X-Forwarded-Proto $scheme;
-                }
-            }
-            NGINX
+            printf '%s\n' \
+              'server {' \
+              '    listen 80 default_server;' \
+              '    server_name _;' \
+              '    return 301 https://$host$request_uri;' \
+              '}' \
+              '' \
+              'server {' \
+              '    listen 443 ssl default_server;' \
+              '    server_name _;' \
+              '' \
+              '    ssl_certificate     /etc/ssl/sweethome/selfsigned.crt;' \
+              '    ssl_certificate_key /etc/ssl/sweethome/selfsigned.key;' \
+              '    ssl_protocols       TLSv1.2 TLSv1.3;' \
+              '' \
+              '    location /api/ {' \
+              '        proxy_pass http://127.0.0.1:5000;' \
+              '        proxy_http_version 1.1;' \
+              '        proxy_set_header Host $host;' \
+              '        proxy_set_header X-Real-IP $remote_addr;' \
+              '        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;' \
+              '        proxy_set_header X-Forwarded-Proto $scheme;' \
+              '    }' \
+              '' \
+              '    location /Account/ {' \
+              '        proxy_pass http://127.0.0.1:5000;' \
+              '        proxy_http_version 1.1;' \
+              '        proxy_set_header Host $host;' \
+              '        proxy_set_header X-Real-IP $remote_addr;' \
+              '        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;' \
+              '        proxy_set_header X-Forwarded-Proto $scheme;' \
+              '    }' \
+              '' \
+              '    location /swagger/ {' \
+              '        proxy_pass http://127.0.0.1:5000;' \
+              '        proxy_http_version 1.1;' \
+              '        proxy_set_header Host $host;' \
+              '        proxy_set_header X-Real-IP $remote_addr;' \
+              '        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;' \
+              '        proxy_set_header X-Forwarded-Proto $scheme;' \
+              '    }' \
+              '' \
+              '    location / {' \
+              '        proxy_pass http://127.0.0.1:8080;' \
+              '        proxy_http_version 1.1;' \
+              '        proxy_set_header Host $host;' \
+              '        proxy_set_header X-Real-IP $remote_addr;' \
+              '        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;' \
+              '        proxy_set_header X-Forwarded-Proto $scheme;' \
+              '    }' \
+              '}' \
+              '' \
+              'server {' \
+              '    listen 8443 ssl;' \
+              '    server_name _;' \
+              '' \
+              '    ssl_certificate     /etc/ssl/sweethome/selfsigned.crt;' \
+              '    ssl_certificate_key /etc/ssl/sweethome/selfsigned.key;' \
+              '    ssl_protocols       TLSv1.2 TLSv1.3;' \
+              '' \
+              '    location / {' \
+              '        proxy_pass http://127.0.0.1:8090;' \
+              '        proxy_http_version 1.1;' \
+              '        proxy_set_header Host $host;' \
+              '        proxy_set_header X-Real-IP $remote_addr;' \
+              '        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;' \
+              '        proxy_set_header X-Forwarded-Proto $scheme;' \
+              '    }' \
+              '}' | sudo tee /etc/nginx/sites-available/sweethome-selfsigned >/dev/null
 
             sudo rm -f /etc/nginx/sites-enabled/default
             sudo ln -sf /etc/nginx/sites-available/sweethome-selfsigned /etc/nginx/sites-enabled/sweethome-selfsigned
