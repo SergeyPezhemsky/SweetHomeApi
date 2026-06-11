@@ -293,6 +293,199 @@ Home Assistant принял service call, body отсутствует.
 - `settingsJson` можно не передавать или передать пустым, тогда backend сохранит `{}`.
 - Для удаления комнаты или виджета отправить layout без этого объекта.
 
+## GET /api/SmartHome/events
+
+Возвращает журнал smart-home событий текущего пользователя, отсортированный от новых к старым.
+
+### Query params
+
+| Field | Type | Default | Notes |
+| --- | --- | --- | --- |
+| `take` | number | `100` | Backend ограничивает значение диапазоном `1..200`. |
+
+### Response 200
+
+```json
+[
+  {
+    "id": "f1d6b6a2-1d54-4e66-a02e-cfbde5604d6d",
+    "type": "DEVICE_STATE_CHANGED",
+    "title": "Device state changed",
+    "message": "Action 'toggle' was sent to 'light.living_room_main'.",
+    "entityId": "light.living_room_main",
+    "roomId": null,
+    "payload": {
+      "entityId": "light.living_room_main",
+      "action": "toggle",
+      "value": null
+    },
+    "createdAt": "2026-06-10T18:30:00Z"
+  }
+]
+```
+
+## GET /api/SmartHome/scenarios
+
+Возвращает пользовательские сценарии.
+
+### Response 200
+
+```json
+[
+  {
+    "id": "evening",
+    "name": "Evening",
+    "icon": "moon",
+    "actions": [
+      {
+        "entityId": "light.living_room_main",
+        "action": "brightness",
+        "value": 80
+      }
+    ],
+    "createdAt": "2026-06-10T18:30:00Z",
+    "updatedAt": "2026-06-10T18:30:00Z"
+  }
+]
+```
+
+## POST /api/SmartHome/scenarios
+
+Создает сценарий. `id` можно не передавать, тогда backend сгенерирует UUID. `actions` должен быть валидным JSON-массивом Home Assistant actions.
+
+### Request body
+
+```json
+{
+  "name": "Evening",
+  "icon": "moon",
+  "actions": [
+    {
+      "entityId": "light.living_room_main",
+      "action": "brightness",
+      "value": 80
+    }
+  ]
+}
+```
+
+### Response 201
+
+Возвращает созданный `SmartHomeScenario`.
+
+## POST /api/SmartHome/scenarios/{scenarioId}/execute
+
+Последовательно выполняет `actions` сохраненного сценария через Home Assistant action API.
+
+### Response 204
+
+Все действия приняты Home Assistant, body отсутствует. Если сценарий не найден, backend возвращает `404`.
+
+## GET /api/SmartHome/automations
+
+Возвращает пользовательские автоматизации.
+
+### Response 200
+
+```json
+[
+  {
+    "id": "night-motion",
+    "name": "Night motion",
+    "enabled": true,
+    "trigger": {
+      "entityId": "binary_sensor.hall_motion",
+      "state": "on"
+    },
+    "conditions": [],
+    "actions": [
+      {
+        "entityId": "light.hall",
+        "action": "turnOn",
+        "value": null
+      }
+    ],
+    "createdAt": "2026-06-10T18:30:00Z",
+    "updatedAt": "2026-06-10T18:30:00Z",
+    "lastExecutedAt": null
+  }
+]
+```
+
+## POST /api/SmartHome/automations
+
+Создает автоматизацию. `id` можно не передавать, тогда backend сгенерирует UUID. `trigger`, `conditions` и `actions` должны быть валидным JSON.
+
+### Request body
+
+```json
+{
+  "name": "Night motion",
+  "enabled": true,
+  "trigger": {
+    "entityId": "binary_sensor.hall_motion",
+    "state": "on"
+  },
+  "conditions": [],
+  "actions": [
+    {
+      "entityId": "light.hall",
+      "action": "turnOn",
+      "value": null
+    }
+  ]
+}
+```
+
+### Response 201
+
+Возвращает созданный `SmartHomeAutomation`.
+
+## PUT /api/SmartHome/automations/{automationId}
+
+Полностью обновляет автоматизацию.
+
+### Response 200
+
+Возвращает обновленный `SmartHomeAutomation`. Если автоматизация не найдена, backend возвращает `404`.
+
+## GET /ws/home
+
+WebSocket realtime-канал текущего пользователя. Для браузерного клиента подключение должно идти с той же cookie-based авторизацией, что и REST API.
+
+### Message format
+
+```json
+{
+  "type": "DEVICE_STATE_CHANGED",
+  "occurredAt": "2026-06-10T18:30:00Z",
+  "payload": {
+    "id": "f1d6b6a2-1d54-4e66-a02e-cfbde5604d6d",
+    "type": "DEVICE_STATE_CHANGED",
+    "title": "Device state changed",
+    "message": "Action 'toggle' was sent to 'light.living_room_main'.",
+    "entityId": "light.living_room_main",
+    "roomId": null,
+    "payload": {
+      "entityId": "light.living_room_main",
+      "action": "toggle",
+      "value": null
+    },
+    "createdAt": "2026-06-10T18:30:00Z"
+  }
+}
+```
+
+### Event types
+
+| Type | When |
+| --- | --- |
+| `DEVICE_STATE_CHANGED` | Успешно выполнено действие устройства через `POST /api/SmartHome/actions` или `POST /api/SmartHome/widgets/{entityId}/command`. |
+| `SENSOR_VALUE_CHANGED` | Зарезервировано для будущих live-обновлений датчиков. |
+| `NEW_EVENT` | Создано общее событие журнала, например выполнение сценария или обновление автоматизации. |
+| `ROOM_UPDATED` | Сохранен layout через `PUT /api/SmartHome/layout`. |
+| `AUTOMATION_EXECUTED` | Зарезервировано для будущего runtime выполнения автоматизаций. |
+
 ## DTO Reference
 
 ### HomeAssistantWidgetControl
@@ -407,6 +600,51 @@ export type HomeAssistantActionRequest = {
   action: string;
   value?: number | string | null;
 };
+
+export type SmartHomeEventType =
+  | "DEVICE_STATE_CHANGED"
+  | "SENSOR_VALUE_CHANGED"
+  | "NEW_EVENT"
+  | "ROOM_UPDATED"
+  | "AUTOMATION_EXECUTED";
+
+export type SmartHomeEvent = {
+  id: string;
+  type: SmartHomeEventType;
+  title: string;
+  message: string;
+  entityId?: string | null;
+  roomId?: string | null;
+  payload: unknown;
+  createdAt: string;
+};
+
+export type SmartHomeScenario = {
+  id?: string;
+  name: string;
+  icon?: string | null;
+  actions?: HomeAssistantActionRequest[];
+  createdAt?: string;
+  updatedAt?: string;
+};
+
+export type SmartHomeAutomation = {
+  id?: string;
+  name: string;
+  enabled: boolean;
+  trigger?: unknown;
+  conditions?: unknown[];
+  actions?: HomeAssistantActionRequest[];
+  createdAt?: string;
+  updatedAt?: string;
+  lastExecutedAt?: string | null;
+};
+
+export type SmartHomeRealtimeMessage = {
+  type: SmartHomeEventType;
+  occurredAt: string;
+  payload: SmartHomeEvent;
+};
 ```
 
 ## Frontend helper examples
@@ -473,6 +711,111 @@ await executeHomeAssistantAction({
   action: "position",
   value: 45
 });
+
+export async function getSmartHomeEvents(take = 100): Promise<SmartHomeEvent[]> {
+  const response = await fetch(`${apiBaseUrl}/api/SmartHome/events?take=${take}`, {
+    credentials: "include"
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to load smart-home events: ${response.status}`);
+  }
+
+  return response.json();
+}
+
+export async function getSmartHomeScenarios(): Promise<SmartHomeScenario[]> {
+  const response = await fetch(`${apiBaseUrl}/api/SmartHome/scenarios`, {
+    credentials: "include"
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to load smart-home scenarios: ${response.status}`);
+  }
+
+  return response.json();
+}
+
+export async function createSmartHomeScenario(
+  scenario: SmartHomeScenario
+): Promise<SmartHomeScenario> {
+  const response = await fetch(`${apiBaseUrl}/api/SmartHome/scenarios`, {
+    method: "POST",
+    credentials: "include",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(scenario)
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to create smart-home scenario: ${response.status}`);
+  }
+
+  return response.json();
+}
+
+export async function executeSmartHomeScenario(scenarioId: string): Promise<void> {
+  const response = await fetch(`${apiBaseUrl}/api/SmartHome/scenarios/${scenarioId}/execute`, {
+    method: "POST",
+    credentials: "include"
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to execute smart-home scenario: ${response.status}`);
+  }
+}
+
+export async function getSmartHomeAutomations(): Promise<SmartHomeAutomation[]> {
+  const response = await fetch(`${apiBaseUrl}/api/SmartHome/automations`, {
+    credentials: "include"
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to load smart-home automations: ${response.status}`);
+  }
+
+  return response.json();
+}
+
+export async function createSmartHomeAutomation(
+  automation: SmartHomeAutomation
+): Promise<SmartHomeAutomation> {
+  const response = await fetch(`${apiBaseUrl}/api/SmartHome/automations`, {
+    method: "POST",
+    credentials: "include",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(automation)
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to create smart-home automation: ${response.status}`);
+  }
+
+  return response.json();
+}
+
+export async function updateSmartHomeAutomation(
+  automationId: string,
+  automation: SmartHomeAutomation
+): Promise<SmartHomeAutomation> {
+  const response = await fetch(`${apiBaseUrl}/api/SmartHome/automations/${automationId}`, {
+    method: "PUT",
+    credentials: "include",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(automation)
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to update smart-home automation: ${response.status}`);
+  }
+
+  return response.json();
+}
 ```
 
 ## Current limitations

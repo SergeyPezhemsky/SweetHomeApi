@@ -66,12 +66,37 @@ public class SmartHomeController(
         [FromBody] HomeAssistantActionDto action,
         CancellationToken cancellationToken)
     {
-        return await ExecuteHomeAssistantActionAsync(new HomeAssistantActionRequest
+        var result = await ExecuteHomeAssistantActionAsync(new HomeAssistantActionRequest
         {
             EntityId = action.EntityId,
             Action = action.Action,
             Value = action.Value
         }, cancellationToken);
+
+        if (result is not NoContentResult)
+            return result;
+
+        var userId = userManager.GetUserId(User);
+        if (!string.IsNullOrWhiteSpace(userId))
+        {
+            var smartHomeEvent = await AddEventAsync(
+                userId,
+                "DEVICE_STATE_CHANGED",
+                "Device state changed",
+                $"Action '{action.Action}' was sent to '{action.EntityId}'.",
+                action.EntityId,
+                null,
+                new { action.EntityId, action.Action, action.Value },
+                cancellationToken);
+
+            await realtimeBroadcaster.BroadcastAsync(
+                userId,
+                "DEVICE_STATE_CHANGED",
+                MapToDto(smartHomeEvent),
+                cancellationToken);
+        }
+
+        return NoContent();
     }
 
     [HttpPost("widgets/{entityId}/command")]
