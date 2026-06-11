@@ -61,10 +61,15 @@ builder.Services.AddIdentity<IdentityUser, IdentityRole>()
 
 builder.Services.ConfigureApplicationCookie(options =>
 {
+    var authCookieLifetime = TimeSpan.FromDays(365 * 50);
+
     options.Cookie.HttpOnly = true;
     options.Cookie.IsEssential = true;
     options.Cookie.SameSite = SameSiteMode.None;
     options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
+    options.Cookie.MaxAge = authCookieLifetime;
+    options.ExpireTimeSpan = authCookieLifetime;
+    options.SlidingExpiration = true;
 
     options.Events.OnRedirectToLogin = context =>
     {

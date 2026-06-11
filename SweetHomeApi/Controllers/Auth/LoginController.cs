@@ -39,7 +39,7 @@ namespace SweetHomeApi.Controllers.Auth
             }
 
             var result =
-                await _signInManager.PasswordSignInAsync(user.UserName, loginRequest.Password, false, false);
+                await _signInManager.PasswordSignInAsync(user.UserName, loginRequest.Password, true, false);
 
             if (result.Succeeded)
                 return Ok(new { Message = "Успешный вход", Name = user.UserName });
@@ -76,7 +76,7 @@ namespace SweetHomeApi.Controllers.Auth
             {
                 // После успешной регистрации, можно автоматически залогинить пользователя, если требуется
                 await _widgetsService.AddDefaultWidgetForUser(newUser.Id);
-                await _signInManager.SignInAsync(newUser, isPersistent: false);
+                await _signInManager.SignInAsync(newUser, isPersistent: true);
                 return Ok(new { message = "Пользователь успешно зарегистрирован" });
             }
 
