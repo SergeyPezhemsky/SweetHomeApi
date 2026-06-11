@@ -6,6 +6,7 @@ using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using Application.Modules.HomeAssistant;
 using Persistance;
 using SweetHomeApi.Infrastructure.HomeAssistant;
@@ -40,7 +41,9 @@ builder.Services.AddCors(options =>
                         return false;
                     }
 
-                    return uri.IsLoopback || uri.Host == "87.242.102.150";
+                    return uri.IsLoopback
+                        || uri.Host == "87.242.102.150"
+                        || uri.Host == "176.109.109.155";
                 })
                 .AllowAnyHeader()
                 .AllowAnyMethod()
@@ -131,16 +134,17 @@ app.MapGet("/ws/home", async (
 using (var scope = app.Services.CreateScope())
 {
     var services = scope.ServiceProvider;
+    var logger = services.GetRequiredService<ILoggerFactory>().CreateLogger("DatabaseMigration");
+
     try
     {
         var context = services.GetRequiredService<SweetHomeDbContext>();
-        // Выполнение миграций
         context.Database.Migrate();
     }
     catch (Exception ex)
     {
-        // Логирование ошибок при необходимости
-        Console.WriteLine("Ошибка применения миграций: " + ex.Message);
+        logger.LogCritical(ex, "Failed to apply database migrations.");
+        throw;
     }
 }
 
