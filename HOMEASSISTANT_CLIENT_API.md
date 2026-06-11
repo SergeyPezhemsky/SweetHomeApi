@@ -109,7 +109,7 @@ fetch(url, {
 
 - `displayType` для выбора базовой карточки.
 - `controls[].type` для выбора конкретного UI-элемента.
-- `controls[].action` для будущей команды управления.
+- `controls[].action` для команды управления через `POST /api/SmartHome/actions`.
 - `icon` для иконки.
 
 ### displayType mapping
@@ -121,7 +121,7 @@ fetch(url, {
 | `value` | Read-only карточка значения. |
 | `status` | Read-only карточка статуса. |
 | `thermostat` | Термостат с numeric stepper. |
-| `cover` | Шторы/ворота: open/close/stop. |
+| `cover` | Шторы/ворота: open/close/stop и опциональный процент позиции. |
 | `actionButton` | Карточка с основной кнопкой действия. |
 | `mediaControls` | Медиа-карточка: кнопки и slider громкости. |
 
@@ -144,10 +144,56 @@ fetch(url, {
 | `sensor` | `value` | Нет controls, только read-only значение. |
 | `binary_sensor` | `status` | Нет controls, только read-only статус. |
 | `climate` | `thermostat` | `stepper` для `setTemperature`. |
-| `cover` | `cover` | `button`: `open`, `close`, `stop`. |
+| `cover` | `cover` | `button`: `open`, `close`, `stop`; если есть `current_position`, дополнительно `slider`: `position` от 0 до 100 %. |
 | `scene` | `actionButton` | `button`: `activate`. |
 | `script` | `actionButton` | `button`: `run`. |
 | `media_player` | `mediaControls` | `button`: on/off/play/pause, `slider`: volume. |
+
+## POST /api/SmartHome/actions
+
+Выполняет поддерживаемое действие Home Assistant для сущности из smart-home виджета.
+Backend не является произвольным proxy к HA services: поддерживаются только действия из `controls[].action`.
+
+### Request body
+
+```json
+{
+  "entityId": "cover.living_room_curtains",
+  "action": "position",
+  "value": 45
+}
+```
+
+| Field | Type | Required | Notes |
+| --- | --- | --- | --- |
+| `entityId` | string | yes | Home Assistant entity id, например `cover.living_room_curtains`. |
+| `action` | string | yes | Action id из `controls[].action`. |
+| `value` | number/string/null | no | Нужно для numeric actions: `position`, `brightness`, `setTemperature`, `volume`. |
+
+### Response 204
+
+Home Assistant принял service call, body отсутствует.
+
+### Error responses
+
+| Status | Meaning |
+| --- | --- |
+| `400` | Неподдерживаемый domain/action или неверное значение. |
+| `502` | Home Assistant вернул ошибку или недоступен. |
+| `503` | Интеграция Home Assistant не настроена. |
+| `504` | Timeout запроса к Home Assistant. |
+
+### Supported actions
+
+| HA type | Actions |
+| --- | --- |
+| `light` | `toggle`, `turnOn`, `turnOff`, `brightness` (`value` 0..255). |
+| `switch` | `toggle`, `turnOn`, `turnOff`. |
+| `climate` | `setTemperature` (`value` number). |
+| `cover` | `open`, `close`, `stop`, `position` (`value` 0..100). |
+| `scene` | `activate`. |
+| `script` | `run`. |
+| `media_player` | `turnOn`, `turnOff`, `play`, `pause`, `volume` (`value` 0..1). |
 
 ## GET /api/SmartHome/layout
 
@@ -355,6 +401,12 @@ export type HomeAssistantCatalogWidget = {
   controls: HomeAssistantWidgetControl[];
   attributes: Record<string, unknown>;
 };
+
+export type HomeAssistantActionRequest = {
+  entityId: string;
+  action: string;
+  value?: number | string | null;
+};
 ```
 
 ## Frontend helper examples
@@ -400,11 +452,29 @@ export async function saveSmartHomeLayout(layout: SmartHomeLayout): Promise<void
     throw new Error(`Failed to save smart-home layout: ${response.status}`);
   }
 }
+
+export async function executeHomeAssistantAction(action: HomeAssistantActionRequest): Promise<void> {
+  const response = await fetch(`${apiBaseUrl}/api/SmartHome/actions`, {
+    method: "POST",
+    credentials: "include",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(action)
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to execute Home Assistant action: ${response.status}`);
+  }
+}
+
+await executeHomeAssistantAction({
+  entityId: "cover.living_room_curtains",
+  action: "position",
+  value: 45
+});
 ```
 
 ## Current limitations
 
-- API сохраняет выбранные виджеты и комнаты, но пока не выполняет команды управления HA entity.
-- `settingsJson` не валидируется backend-ом как JSON-объект.
-- Backend не проверяет, что `entityId` существует в Home Assistant при сохранении layout.
 - Live-state и controls приходят из `widget-catalog`; сохраненный layout хранит пользовательскую конфигурацию.

@@ -1,4 +1,6 @@
+using System.Net;
 using System.Net.Http.Headers;
+using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Application.Modules.HomeAssistant;
@@ -51,15 +53,59 @@ public class HomeAssistantClient : IHomeAssistantClient
 
         return states?
             .Where(state => !string.IsNullOrWhiteSpace(state.EntityId))
-            .Select(state => new HomeAssistantEntityState
-            {
-                EntityId = state.EntityId!,
-                State = state.State ?? string.Empty,
-                LastChanged = state.LastChanged,
-                LastUpdated = state.LastUpdated,
-                Attributes = state.Attributes ?? new Dictionary<string, JsonElement>()
-            })
+            .Select(MapToEntityState)
             .ToList() ?? [];
+    }
+
+    public async Task<HomeAssistantEntityState?> GetStateAsync(string entityId, CancellationToken cancellationToken)
+    {
+        EnsureConfigured();
+
+        using var request = CreateRequest(HttpMethod.Get, $"api/states/{Uri.EscapeDataString(entityId)}");
+        using var response = await _httpClient.SendAsync(request, cancellationToken);
+
+        if (response.StatusCode == HttpStatusCode.Unauthorized)
+        {
+            throw new HomeAssistantException("Home Assistant token is invalid or expired.");
+        }
+
+        if (response.StatusCode == HttpStatusCode.NotFound)
+        {
+            return null;
+        }
+
+        response.EnsureSuccessStatusCode();
+
+        await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
+        var state = await JsonSerializer.DeserializeAsync<HomeAssistantStateResponse>(
+            stream,
+            JsonSerializerOptions,
+            cancellationToken);
+
+        return string.IsNullOrWhiteSpace(state?.EntityId)
+            ? null
+            : MapToEntityState(state);
+    }
+
+    public async Task CallServiceAsync(
+        string domain,
+        string service,
+        IReadOnlyDictionary<string, object?> data,
+        CancellationToken cancellationToken)
+    {
+        EnsureConfigured();
+
+        using var request = CreateRequest(HttpMethod.Post, $"api/services/{domain}/{service}");
+        request.Content = JsonContent.Create(data, options: JsonSerializerOptions);
+
+        using var response = await _httpClient.SendAsync(request, cancellationToken);
+
+        if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+        {
+            throw new HomeAssistantException("Home Assistant token is invalid or expired.");
+        }
+
+        response.EnsureSuccessStatusCode();
     }
 
     private HttpRequestMessage CreateRequest(HttpMethod method, string path)
@@ -68,6 +114,18 @@ public class HomeAssistantClient : IHomeAssistantClient
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _options.AccessToken);
         request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
         return request;
+    }
+
+    private static HomeAssistantEntityState MapToEntityState(HomeAssistantStateResponse state)
+    {
+        return new HomeAssistantEntityState
+        {
+            EntityId = state.EntityId!,
+            State = state.State ?? string.Empty,
+            LastChanged = state.LastChanged,
+            LastUpdated = state.LastUpdated,
+            Attributes = state.Attributes ?? new Dictionary<string, JsonElement>()
+        };
     }
 
     private void EnsureConfigured()

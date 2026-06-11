@@ -9,6 +9,7 @@ using Microsoft.Extensions.Hosting;
 using Application.Modules.HomeAssistant;
 using Persistance;
 using SweetHomeApi.Infrastructure.HomeAssistant;
+using SweetHomeApi.Infrastructure.Realtime;
 using SweetHomeApi.Registration;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -19,6 +20,7 @@ builder.Services.AddControllers();
 
 builder.Services.RegisterRepositories();
 builder.Services.RegisterApplicationServices();
+builder.Services.AddSingleton<IHomeRealtimeBroadcaster, HomeRealtimeBroadcaster>();
 builder.Services.Configure<HomeAssistantOptions>(builder.Configuration.GetSection("HomeAssistant"));
 builder.Services.AddHttpClient<IHomeAssistantClient, HomeAssistantClient>();
 
@@ -59,10 +61,15 @@ builder.Services.AddIdentity<IdentityUser, IdentityRole>()
 
 builder.Services.ConfigureApplicationCookie(options =>
 {
+    var authCookieLifetime = TimeSpan.FromDays(365 * 50);
+
     options.Cookie.HttpOnly = true;
     options.Cookie.IsEssential = true;
     options.Cookie.SameSite = SameSiteMode.None;
     options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
+    options.Cookie.MaxAge = authCookieLifetime;
+    options.ExpireTimeSpan = authCookieLifetime;
+    options.SlidingExpiration = true;
 
     options.Events.OnRedirectToLogin = context =>
     {
@@ -95,8 +102,31 @@ app.UseCors("AllowSpecificOrigin");
 
 app.UseAuthentication();
 app.UseAuthorization();
+app.UseWebSockets();
 
 app.MapControllers();
+app.MapGet("/ws/home", async (
+    HttpContext context,
+    UserManager<IdentityUser> userManager,
+    IHomeRealtimeBroadcaster realtimeBroadcaster,
+    CancellationToken cancellationToken) =>
+{
+    if (!context.WebSockets.IsWebSocketRequest)
+    {
+        context.Response.StatusCode = StatusCodes.Status400BadRequest;
+        return;
+    }
+
+    var userId = userManager.GetUserId(context.User);
+    if (string.IsNullOrWhiteSpace(userId))
+    {
+        context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+        return;
+    }
+
+    using var webSocket = await context.WebSockets.AcceptWebSocketAsync();
+    await realtimeBroadcaster.AddClientAsync(userId, webSocket, cancellationToken);
+}).RequireAuthorization();
 
 using (var scope = app.Services.CreateScope())
 {
