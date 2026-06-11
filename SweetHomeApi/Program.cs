@@ -140,6 +140,7 @@ using (var scope = app.Services.CreateScope())
     {
         var context = services.GetRequiredService<SweetHomeDbContext>();
         context.Database.Migrate();
+        ApplySmartHomeSchemaGuard(context);
     }
     catch (Exception ex)
     {
@@ -150,3 +151,61 @@ using (var scope = app.Services.CreateScope())
 
 
 app.Run();
+
+static void ApplySmartHomeSchemaGuard(SweetHomeDbContext context)
+{
+    context.Database.ExecuteSqlRaw("""
+        CREATE TABLE IF NOT EXISTS "SmartHomeScenarios" (
+            "Id" text NOT NULL,
+            "Name" text NOT NULL,
+            "Icon" text NOT NULL,
+            "ActionsJson" text NOT NULL,
+            "CreatedAt" timestamp with time zone NOT NULL,
+            "UpdatedAt" timestamp with time zone NOT NULL,
+            "UserId" text NOT NULL,
+            CONSTRAINT "PK_SmartHomeScenarios" PRIMARY KEY ("Id"),
+            CONSTRAINT "FK_SmartHomeScenarios_AspNetUsers_UserId" FOREIGN KEY ("UserId") REFERENCES "AspNetUsers" ("Id") ON DELETE CASCADE
+        );
+
+        CREATE INDEX IF NOT EXISTS "IX_SmartHomeScenarios_UserId"
+            ON "SmartHomeScenarios" ("UserId");
+
+        CREATE TABLE IF NOT EXISTS "SmartHomeAutomations" (
+            "Id" text NOT NULL,
+            "Name" text NOT NULL,
+            "Enabled" boolean NOT NULL,
+            "TriggerJson" text NOT NULL,
+            "ConditionsJson" text NOT NULL,
+            "ActionsJson" text NOT NULL,
+            "CreatedAt" timestamp with time zone NOT NULL,
+            "UpdatedAt" timestamp with time zone NOT NULL,
+            "LastExecutedAt" timestamp with time zone NULL,
+            "UserId" text NOT NULL,
+            CONSTRAINT "PK_SmartHomeAutomations" PRIMARY KEY ("Id"),
+            CONSTRAINT "FK_SmartHomeAutomations_AspNetUsers_UserId" FOREIGN KEY ("UserId") REFERENCES "AspNetUsers" ("Id") ON DELETE CASCADE
+        );
+
+        CREATE INDEX IF NOT EXISTS "IX_SmartHomeAutomations_UserId"
+            ON "SmartHomeAutomations" ("UserId");
+
+        CREATE TABLE IF NOT EXISTS "SmartHomeEvents" (
+            "Id" text NOT NULL,
+            "Type" text NOT NULL,
+            "Title" text NOT NULL,
+            "Message" text NOT NULL,
+            "EntityId" text NULL,
+            "RoomId" text NULL,
+            "PayloadJson" text NOT NULL,
+            "CreatedAt" timestamp with time zone NOT NULL,
+            "UserId" text NOT NULL,
+            CONSTRAINT "PK_SmartHomeEvents" PRIMARY KEY ("Id"),
+            CONSTRAINT "FK_SmartHomeEvents_AspNetUsers_UserId" FOREIGN KEY ("UserId") REFERENCES "AspNetUsers" ("Id") ON DELETE CASCADE
+        );
+
+        CREATE INDEX IF NOT EXISTS "IX_SmartHomeEvents_CreatedAt"
+            ON "SmartHomeEvents" ("CreatedAt");
+
+        CREATE INDEX IF NOT EXISTS "IX_SmartHomeEvents_UserId"
+            ON "SmartHomeEvents" ("UserId");
+        """);
+}
