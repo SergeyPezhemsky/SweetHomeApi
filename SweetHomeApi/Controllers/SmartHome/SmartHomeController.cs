@@ -412,13 +412,12 @@ public class SmartHomeController(
 
         try
         {
-            var catalog = await homeAssistantService.GetWidgetCatalogAsync(cancellationToken);
-            var knownEntityIds = catalog.Select(widget => widget.Id).ToHashSet(StringComparer.OrdinalIgnoreCase);
-            var unknownEntityIds = layout.Widgets
+            var entityIds = layout.Widgets
                 .Select(widget => widget.EntityId)
-                .Where(entityId => !knownEntityIds.Contains(entityId))
+                .Where(entityId => !string.IsNullOrWhiteSpace(entityId))
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .ToList();
+            var unknownEntityIds = await homeAssistantService.GetUnknownWidgetEntityIdsAsync(entityIds, cancellationToken);
 
             if (unknownEntityIds.Count > 0)
             {

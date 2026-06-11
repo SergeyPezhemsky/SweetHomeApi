@@ -31,6 +31,30 @@ public class HomeAssistantService(IHomeAssistantClient homeAssistantClient) : IH
             .ToList();
     }
 
+    public async Task<IReadOnlyList<string>> GetUnknownWidgetEntityIdsAsync(
+        IReadOnlyCollection<string> entityIds,
+        CancellationToken cancellationToken)
+    {
+        var distinctEntityIds = entityIds
+            .Where(entityId => !string.IsNullOrWhiteSpace(entityId))
+            .Select(entityId => entityId.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        var entityChecks = distinctEntityIds.Select(async entityId =>
+        {
+            var state = await homeAssistantClient.GetStateAsync(entityId, cancellationToken);
+            return state is null || MapToCatalogWidget(state) is null
+                ? entityId
+                : null;
+        });
+
+        return (await Task.WhenAll(entityChecks))
+            .Where(entityId => entityId is not null)
+            .Select(entityId => entityId!)
+            .ToList();
+    }
+
     public Task ExecuteActionAsync(HomeAssistantActionRequest request, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(request.EntityId))
