@@ -146,6 +146,7 @@ using (var scope = app.Services.CreateScope())
         var context = services.GetRequiredService<SweetHomeDbContext>();
         context.Database.Migrate();
         ApplySmartHomeSchemaGuard(context);
+        ApplyMoviesSchemaGuard(context);
     }
     catch (Exception ex)
     {
@@ -212,5 +213,40 @@ static void ApplySmartHomeSchemaGuard(SweetHomeDbContext context)
 
         CREATE INDEX IF NOT EXISTS "IX_SmartHomeEvents_UserId"
             ON "SmartHomeEvents" ("UserId");
+        """);
+}
+
+static void ApplyMoviesSchemaGuard(SweetHomeDbContext context)
+{
+    context.Database.ExecuteSqlRaw("""
+        CREATE TABLE IF NOT EXISTS "Movies" (
+            "MovieId" text NOT NULL,
+            "Title" text NOT NULL,
+            "ContentType" text NOT NULL,
+            "Rating" numeric NULL,
+            "Genres" text[] NOT NULL,
+            "Country" text NULL,
+            "Comment" text NULL,
+            "CreatedAt" timestamp with time zone NOT NULL,
+            "UpdatedAt" timestamp with time zone NOT NULL,
+            "UserId" text NOT NULL,
+            CONSTRAINT "PK_Movies" PRIMARY KEY ("MovieId"),
+            CONSTRAINT "FK_Movies_AspNetUsers_UserId" FOREIGN KEY ("UserId") REFERENCES "AspNetUsers" ("Id") ON DELETE CASCADE
+        );
+
+        CREATE INDEX IF NOT EXISTS "IX_Movies_CreatedAt"
+            ON "Movies" ("CreatedAt");
+
+        CREATE INDEX IF NOT EXISTS "IX_Movies_Rating"
+            ON "Movies" ("Rating");
+
+        CREATE INDEX IF NOT EXISTS "IX_Movies_Title"
+            ON "Movies" ("Title");
+
+        CREATE INDEX IF NOT EXISTS "IX_Movies_UpdatedAt"
+            ON "Movies" ("UpdatedAt");
+
+        CREATE INDEX IF NOT EXISTS "IX_Movies_UserId"
+            ON "Movies" ("UserId");
         """);
 }

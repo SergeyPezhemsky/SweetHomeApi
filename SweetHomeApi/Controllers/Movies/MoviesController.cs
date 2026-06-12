@@ -53,6 +53,26 @@ public class MoviesController(IMovieService movieService, UserManager<IdentityUs
         });
     }
 
+    [HttpGet("dictionaries")]
+    public async Task<IActionResult> GetDictionaries()
+    {
+        var userId = GetUserId();
+        if (userId is null)
+            return Unauthorized();
+
+        var dictionaries = await movieService.GetDictionariesAsync(userId);
+        return Ok(new MovieDictionaryDto
+        {
+            ContentTypes = dictionaries.ContentTypes.Select(x => new MovieContentTypeDto
+            {
+                Code = x.Code,
+                Name = x.Name
+            }).ToList(),
+            Genres = dictionaries.Genres,
+            Countries = dictionaries.Countries
+        });
+    }
+
     [HttpGet("{movieId}")]
     public async Task<IActionResult> GetById([FromRoute] string movieId)
     {
@@ -108,26 +128,6 @@ public class MoviesController(IMovieService movieService, UserManager<IdentityUs
 
         var deleted = await movieService.DeleteAsync(userId, movieId);
         return deleted ? NoContent() : NotFound(MovieNotFound());
-    }
-
-    [HttpGet("dictionaries")]
-    public async Task<IActionResult> GetDictionaries()
-    {
-        var userId = GetUserId();
-        if (userId is null)
-            return Unauthorized();
-
-        var dictionaries = await movieService.GetDictionariesAsync(userId);
-        return Ok(new MovieDictionaryDto
-        {
-            ContentTypes = dictionaries.ContentTypes.Select(x => new MovieContentTypeDto
-            {
-                Code = x.Code,
-                Name = x.Name
-            }).ToList(),
-            Genres = dictionaries.Genres,
-            Countries = dictionaries.Countries
-        });
     }
 
     private string? GetUserId()
