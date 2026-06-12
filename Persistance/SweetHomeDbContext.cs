@@ -1,4 +1,5 @@
 using Application.Modules.Health;
+using Application.Modules.Movies;
 using Application.Modules.SmartHome;
 using Application.Modules.Widgets;
 using Microsoft.AspNetCore.Identity;
@@ -32,6 +33,29 @@ public class SweetHomeDbContext(DbContextOptions<SweetHomeDbContext> options)
 
             entity.HasIndex(e => new { e.UserId, e.Date })
                 .IsUnique();
+
+            entity
+                .HasOne(e => e.User)
+                .WithMany()
+                .HasForeignKey(e => e.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<Movie>(entity =>
+        {
+            entity.HasKey(e => e.MovieId);
+
+            entity.HasIndex(e => e.UserId);
+            entity.HasIndex(e => e.Title);
+            entity.HasIndex(e => e.Rating);
+            entity.HasIndex(e => e.CreatedAt);
+            entity.HasIndex(e => e.UpdatedAt);
+
+            entity.Property(e => e.ContentType)
+                .HasConversion<string>();
+
+            entity.Property(e => e.Genres)
+                .HasColumnType("text[]");
 
             entity
                 .HasOne(e => e.User)
@@ -116,6 +140,7 @@ public class SweetHomeDbContext(DbContextOptions<SweetHomeDbContext> options)
 
     public DbSet<MainWidget> MainWidgets { get; set; }
     public DbSet<HealthEntry> HealthEntries { get; set; }
+    public DbSet<Movie> Movies { get; set; }
     public DbSet<SmartHomeRoom> SmartHomeRooms { get; set; }
     public DbSet<SmartHomeWidget> SmartHomeWidgets { get; set; }
     public DbSet<SmartHomeScenario> SmartHomeScenarios { get; set; }
