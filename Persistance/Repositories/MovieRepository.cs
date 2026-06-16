@@ -1,4 +1,5 @@
 using Application.Modules.Movies;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 
 namespace Persistance.Repositories;
@@ -60,6 +61,12 @@ public class MovieRepository(SweetHomeDbContext context) : IMovieRepository
             .FirstOrDefaultAsync(x => x.UserId == userId && x.MovieId == movieId);
     }
 
+    public Task<Movie?> GetByIdAsync(string movieId)
+    {
+        return context.Set<Movie>()
+            .FirstOrDefaultAsync(x => x.MovieId == movieId);
+    }
+
     public async Task AddAsync(Movie movie)
     {
         await context.Set<Movie>().AddAsync(movie);
@@ -96,6 +103,151 @@ public class MovieRepository(SweetHomeDbContext context) : IMovieRepository
             .Select(x => x.Country!)
             .Distinct()
             .ToListAsync();
+    }
+
+    public async Task<MovieFriendSearchResult> SearchFriendsAsync(string userId, string? query)
+    {
+        var friends = context.Set<MovieShareSetting>()
+            .AsNoTracking()
+            .Where(x => x.ShareMovies && x.UserId != userId)
+            .Join(
+                context.Set<IdentityUser>().AsNoTracking(),
+                setting => setting.UserId,
+                user => user.Id,
+                (setting, user) => user);
+
+        if (!string.IsNullOrWhiteSpace(query))
+        {
+            var search = query.Trim();
+            friends = friends.Where(x => x.UserName != null && EF.Functions.ILike(x.UserName, $"%{search}%"));
+        }
+
+        var total = await friends.CountAsync();
+        var items = await friends
+            .OrderBy(x => x.UserName)
+            .Select(x => new MovieFriendSummary
+            {
+                UserId = x.Id,
+                Nickname = x.UserName ?? string.Empty,
+                MoviesCount = context.Set<Movie>().Count(movie => movie.UserId == x.Id)
+            })
+            .ToListAsync();
+
+        return new MovieFriendSearchResult
+        {
+            Items = items,
+            Total = total
+        };
+    }
+
+    public async Task<bool> GetShareMoviesAsync(string userId)
+    {
+        return await context.Set<MovieShareSetting>()
+            .AsNoTracking()
+            .Where(x => x.UserId == userId)
+            .Select(x => x.ShareMovies)
+            .FirstOrDefaultAsync();
+    }
+
+    public async Task SetShareMoviesAsync(string userId, bool shareMovies)
+    {
+        var setting = await context.Set<MovieShareSetting>()
+            .FirstOrDefaultAsync(x => x.UserId == userId);
+
+        if (setting is null)
+        {
+            setting = new MovieShareSetting
+            {
+                UserId = userId,
+                ShareMovies = shareMovies
+            };
+            await context.Set<MovieShareSetting>().AddAsync(setting);
+        }
+        else
+        {
+            setting.ShareMovies = shareMovies;
+        }
+
+        await context.SaveChangesAsync();
+    }
+
+    public async Task<MovieFriendMoviesResult> GetFriendMoviesAsync(string userId, string friendUserId, int page, int pageSize)
+    {
+        var owner = await context.Set<IdentityUser>()
+            .AsNoTracking()
+            .Where(x => x.Id == friendUserId)
+            .Select(x => new { x.Id, x.UserName })
+            .FirstOrDefaultAsync();
+
+        if (owner is null)
+            return new MovieFriendMoviesResult { Status = MovieFriendAccessStatus.NotFound };
+
+        if (!await UserSharesMoviesAsync(friendUserId))
+            return new MovieFriendMoviesResult { Status = MovieFriendAccessStatus.Forbidden };
+
+        var movies = context.Set<Movie>()
+            .AsNoTracking()
+            .Where(x => x.UserId == friendUserId)
+            .OrderByDescending(x => x.UpdatedAt);
+
+        var total = await movies.CountAsync();
+        var importedMovieIds = context.Set<Movie>()
+            .AsNoTracking()
+            .Where(x => x.UserId == userId && x.ImportedFromMovieId != null)
+            .Select(x => x.ImportedFromMovieId!);
+
+        var items = await movies
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .Select(x => new SharedMovieListItem
+            {
+                MovieId = x.MovieId,
+                Title = x.Title,
+                ContentType = x.ContentType,
+                Rating = x.Rating,
+                Genres = x.Genres,
+                Country = x.Country,
+                Comment = x.Comment,
+                CreatedAt = x.CreatedAt,
+                UpdatedAt = x.UpdatedAt,
+                OwnerUserId = owner.Id,
+                OwnerNickname = owner.UserName ?? string.Empty,
+                IsInMyList = importedMovieIds.Contains(x.MovieId)
+            })
+            .ToListAsync();
+
+        return new MovieFriendMoviesResult
+        {
+            Status = MovieFriendAccessStatus.Ok,
+            OwnerUserId = owner.Id,
+            OwnerNickname = owner.UserName ?? string.Empty,
+            Items = items,
+            Page = page,
+            PageSize = pageSize,
+            Total = total,
+            HasNext = page * pageSize < total
+        };
+    }
+
+    public Task<Movie?> GetImportedMovieAsync(string userId, string sourceMovieId)
+    {
+        return context.Set<Movie>()
+            .AsNoTracking()
+            .FirstOrDefaultAsync(x => x.UserId == userId && x.ImportedFromMovieId == sourceMovieId);
+    }
+
+    public Task<bool> UserExistsAsync(string userId)
+    {
+        return context.Set<IdentityUser>()
+            .AsNoTracking()
+            .AnyAsync(x => x.Id == userId);
+    }
+
+    public Task<bool> UserSharesMoviesAsync(string userId)
+    {
+        return context.Set<MovieShareSetting>()
+            .AsNoTracking()
+            .AnyAsync(x => x.UserId == userId && x.ShareMovies);
     }
 
     private static IQueryable<Movie> ApplySorting(IQueryable<Movie> movies, MovieQuery query)

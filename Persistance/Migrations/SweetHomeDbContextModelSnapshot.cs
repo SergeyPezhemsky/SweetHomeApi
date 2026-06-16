@@ -87,6 +87,9 @@ namespace Persistance.Migrations
                         .IsRequired()
                         .HasColumnType("text[]");
 
+                    b.Property<string>("ImportedFromMovieId")
+                        .HasColumnType("text");
+
                     b.Property<decimal?>("Rating")
                         .HasColumnType("numeric");
 
@@ -113,7 +116,22 @@ namespace Persistance.Migrations
 
                     b.HasIndex("UserId");
 
+                    b.HasIndex("UserId", "ImportedFromMovieId");
+
                     b.ToTable("Movies");
+                });
+
+            modelBuilder.Entity("Application.Modules.Movies.MovieShareSetting", b =>
+                {
+                    b.Property<string>("UserId")
+                        .HasColumnType("text");
+
+                    b.Property<bool>("ShareMovies")
+                        .HasColumnType("boolean");
+
+                    b.HasKey("UserId");
+
+                    b.ToTable("MovieShareSettings");
                 });
 
             modelBuilder.Entity("Application.Modules.SmartHome.SmartHomeRoom", b =>
@@ -562,6 +580,17 @@ namespace Persistance.Migrations
                 });
 
             modelBuilder.Entity("Application.Modules.Movies.Movie", b =>
+                {
+                    b.HasOne("Microsoft.AspNetCore.Identity.IdentityUser", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("Application.Modules.Movies.MovieShareSetting", b =>
                 {
                     b.HasOne("Microsoft.AspNetCore.Identity.IdentityUser", "User")
                         .WithMany()

@@ -248,5 +248,18 @@ static void ApplyMoviesSchemaGuard(SweetHomeDbContext context)
 
         CREATE INDEX IF NOT EXISTS "IX_Movies_UserId"
             ON "Movies" ("UserId");
+
+        ALTER TABLE "Movies"
+            ADD COLUMN IF NOT EXISTS "ImportedFromMovieId" text NULL;
+
+        CREATE INDEX IF NOT EXISTS "IX_Movies_UserId_ImportedFromMovieId"
+            ON "Movies" ("UserId", "ImportedFromMovieId");
+
+        CREATE TABLE IF NOT EXISTS "MovieShareSettings" (
+            "UserId" text NOT NULL,
+            "ShareMovies" boolean NOT NULL,
+            CONSTRAINT "PK_MovieShareSettings" PRIMARY KEY ("UserId"),
+            CONSTRAINT "FK_MovieShareSettings_AspNetUsers_UserId" FOREIGN KEY ("UserId") REFERENCES "AspNetUsers" ("Id") ON DELETE CASCADE
+        );
         """);
 }

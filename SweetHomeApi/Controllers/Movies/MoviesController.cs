@@ -1,5 +1,6 @@
 using Application.Modules.Movies;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using SweetHomeApi.Controllers.Movies.Dto;
@@ -71,6 +72,104 @@ public class MoviesController(IMovieService movieService, UserManager<IdentityUs
             Genres = dictionaries.Genres,
             Countries = dictionaries.Countries
         });
+    }
+
+    [HttpGet("friends")]
+    public async Task<IActionResult> SearchFriends([FromQuery] string? query)
+    {
+        var userId = GetUserId();
+        if (userId is null)
+            return Unauthorized();
+
+        var friends = await movieService.SearchFriendsAsync(userId, query);
+        return Ok(new MovieFriendSearchResponseDto
+        {
+            Items = friends.Items.Select(x => new MovieFriendSummaryDto
+            {
+                UserId = x.UserId,
+                Nickname = x.Nickname,
+                MoviesCount = x.MoviesCount
+            }).ToList(),
+            Total = friends.Total
+        });
+    }
+
+    [HttpGet("friends/share-settings")]
+    public async Task<IActionResult> GetShareSettings()
+    {
+        var userId = GetUserId();
+        if (userId is null)
+            return Unauthorized();
+
+        return Ok(new MovieShareSettingsDto
+        {
+            ShareMovies = await movieService.GetShareMoviesAsync(userId)
+        });
+    }
+
+    [HttpPut("friends/share-settings")]
+    public async Task<IActionResult> UpdateShareSettings([FromBody] MovieShareSettingsDto dto)
+    {
+        var userId = GetUserId();
+        if (userId is null)
+            return Unauthorized();
+
+        return Ok(new MovieShareSettingsDto
+        {
+            ShareMovies = await movieService.UpdateShareMoviesAsync(userId, dto.ShareMovies)
+        });
+    }
+
+    [HttpGet("friends/{friendUserId}")]
+    public async Task<IActionResult> GetFriendMovies(
+        [FromRoute] string friendUserId,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 20)
+    {
+        var userId = GetUserId();
+        if (userId is null)
+            return Unauthorized();
+
+        var movies = await movieService.GetFriendMoviesAsync(userId, friendUserId, page, pageSize);
+        return movies.Status switch
+        {
+            MovieFriendAccessStatus.NotFound => NotFound(UserNotFound()),
+            MovieFriendAccessStatus.Forbidden => StatusCode(StatusCodes.Status403Forbidden, MovieListForbidden()),
+            _ => Ok(new FriendMovieListResponseDto
+            {
+                OwnerUserId = movies.OwnerUserId,
+                OwnerNickname = movies.OwnerNickname,
+                Items = movies.Items.Select(ToSharedDto).ToList(),
+                Page = movies.Page,
+                PageSize = movies.PageSize,
+                Total = movies.Total,
+                HasNext = movies.HasNext
+            })
+        };
+    }
+
+    [HttpPost("friends/import")]
+    public async Task<IActionResult> ImportFriendMovie([FromBody] ImportFriendMovieDto dto)
+    {
+        var userId = GetUserId();
+        if (userId is null)
+            return Unauthorized();
+
+        if (string.IsNullOrWhiteSpace(dto.SourceMovieId))
+        {
+            return BadRequest(ValidationError(
+            [
+                new ErrorDetailDto { Field = "sourceMovieId", Message = "sourceMovieId is required" }
+            ]));
+        }
+
+        var result = await movieService.ImportFriendMovieAsync(userId, dto.SourceMovieId);
+        return result.Status switch
+        {
+            MovieFriendAccessStatus.NotFound => NotFound(SourceMovieNotFound()),
+            MovieFriendAccessStatus.Forbidden => StatusCode(StatusCodes.Status403Forbidden, MovieListForbidden()),
+            _ => Ok(new ImportFriendMovieResponseDto { MovieId = result.MovieId! })
+        };
     }
 
     [HttpGet("{movieId}")]
@@ -151,6 +250,25 @@ public class MoviesController(IMovieService movieService, UserManager<IdentityUs
         };
     }
 
+    private static SharedMovieListItemDto ToSharedDto(SharedMovieListItem movie)
+    {
+        return new SharedMovieListItemDto
+        {
+            MovieId = movie.MovieId,
+            Title = movie.Title,
+            ContentType = movie.ContentType,
+            Rating = movie.Rating,
+            Genres = movie.Genres,
+            Country = movie.Country,
+            Comment = movie.Comment,
+            CreatedAt = movie.CreatedAt,
+            UpdatedAt = movie.UpdatedAt,
+            OwnerUserId = movie.OwnerUserId,
+            OwnerNickname = movie.OwnerNickname,
+            IsInMyList = movie.IsInMyList
+        };
+    }
+
     private static Movie ToMovie(UpsertMovieDto dto)
     {
         return new Movie
@@ -181,6 +299,36 @@ public class MoviesController(IMovieService movieService, UserManager<IdentityUs
         {
             ErrorCode = "MOVIE_NOT_FOUND",
             Message = "Фильм не найден",
+            TraceId = HttpContext.TraceIdentifier
+        };
+    }
+
+    private ErrorResponseDto UserNotFound()
+    {
+        return new ErrorResponseDto
+        {
+            ErrorCode = "USER_NOT_FOUND",
+            Message = "Пользователь не найден",
+            TraceId = HttpContext.TraceIdentifier
+        };
+    }
+
+    private ErrorResponseDto MovieListForbidden()
+    {
+        return new ErrorResponseDto
+        {
+            ErrorCode = "MOVIE_LIST_FORBIDDEN",
+            Message = "Доступ к списку фильмов закрыт",
+            TraceId = HttpContext.TraceIdentifier
+        };
+    }
+
+    private ErrorResponseDto SourceMovieNotFound()
+    {
+        return new ErrorResponseDto
+        {
+            ErrorCode = "SOURCE_MOVIE_NOT_FOUND",
+            Message = "Исходный фильм не найден",
             TraceId = HttpContext.TraceIdentifier
         };
     }

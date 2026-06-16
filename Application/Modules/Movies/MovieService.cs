@@ -82,6 +82,71 @@ public class MovieService(IMovieRepository movieRepository) : IMovieService
         };
     }
 
+    public Task<MovieFriendSearchResult> SearchFriendsAsync(string userId, string? query)
+    {
+        return movieRepository.SearchFriendsAsync(userId, query);
+    }
+
+    public Task<bool> GetShareMoviesAsync(string userId)
+    {
+        return movieRepository.GetShareMoviesAsync(userId);
+    }
+
+    public async Task<bool> UpdateShareMoviesAsync(string userId, bool shareMovies)
+    {
+        await movieRepository.SetShareMoviesAsync(userId, shareMovies);
+        return shareMovies;
+    }
+
+    public Task<MovieFriendMoviesResult> GetFriendMoviesAsync(string userId, string friendUserId, int page, int pageSize)
+    {
+        return movieRepository.GetFriendMoviesAsync(userId, friendUserId, Math.Max(1, page), Math.Clamp(pageSize, 1, 100));
+    }
+
+    public async Task<MovieImportResult> ImportFriendMovieAsync(string userId, string sourceMovieId)
+    {
+        var sourceMovie = await movieRepository.GetByIdAsync(sourceMovieId);
+        if (sourceMovie is null)
+            return new MovieImportResult { Status = MovieFriendAccessStatus.NotFound };
+
+        if (!await movieRepository.UserSharesMoviesAsync(sourceMovie.UserId))
+            return new MovieImportResult { Status = MovieFriendAccessStatus.Forbidden };
+
+        var existingImport = await movieRepository.GetImportedMovieAsync(userId, sourceMovieId);
+        if (existingImport is not null)
+        {
+            return new MovieImportResult
+            {
+                Status = MovieFriendAccessStatus.Ok,
+                MovieId = existingImport.MovieId
+            };
+        }
+
+        var now = DateTime.UtcNow;
+        var importedMovie = new Movie
+        {
+            MovieId = Guid.NewGuid().ToString(),
+            Title = sourceMovie.Title,
+            ContentType = sourceMovie.ContentType,
+            Rating = sourceMovie.Rating,
+            Genres = sourceMovie.Genres.ToList(),
+            Country = sourceMovie.Country,
+            Comment = sourceMovie.Comment,
+            ImportedFromMovieId = sourceMovie.MovieId,
+            CreatedAt = now,
+            UpdatedAt = now,
+            UserId = userId
+        };
+        NormalizeMovie(importedMovie);
+
+        await movieRepository.AddAsync(importedMovie);
+        return new MovieImportResult
+        {
+            Status = MovieFriendAccessStatus.Ok,
+            MovieId = importedMovie.MovieId
+        };
+    }
+
     private static void NormalizeMovie(Movie movie)
     {
         movie.Title = movie.Title.Trim();

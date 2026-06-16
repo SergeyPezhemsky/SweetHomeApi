@@ -6,7 +6,9 @@ public static class MovieDictionaries
     [
         new() { Code = "MOVIE", Name = "фильм" },
         new() { Code = "CARTOON", Name = "мультфильм" },
-        new() { Code = "SERIES", Name = "сериал" }
+        new() { Code = "SERIES", Name = "сериал" },
+        new() { Code = "ANIME", Name = "аниме" },
+        new() { Code = "DORAMA", Name = "дорама" }
     ];
 
     public static readonly List<string> Genres =

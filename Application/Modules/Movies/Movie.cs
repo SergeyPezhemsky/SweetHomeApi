@@ -11,6 +11,7 @@ public class Movie
     public List<string> Genres { get; set; } = [];
     public string? Country { get; set; }
     public string? Comment { get; set; }
+    public string? ImportedFromMovieId { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
     public string UserId { get; set; } = string.Empty;

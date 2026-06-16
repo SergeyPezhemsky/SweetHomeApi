@@ -50,12 +50,24 @@ public class SweetHomeDbContext(DbContextOptions<SweetHomeDbContext> options)
             entity.HasIndex(e => e.Rating);
             entity.HasIndex(e => e.CreatedAt);
             entity.HasIndex(e => e.UpdatedAt);
+            entity.HasIndex(e => new { e.UserId, e.ImportedFromMovieId });
 
             entity.Property(e => e.ContentType)
                 .HasConversion<string>();
 
             entity.Property(e => e.Genres)
                 .HasColumnType("text[]");
+
+            entity
+                .HasOne(e => e.User)
+                .WithMany()
+                .HasForeignKey(e => e.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<MovieShareSetting>(entity =>
+        {
+            entity.HasKey(e => e.UserId);
 
             entity
                 .HasOne(e => e.User)
@@ -141,6 +153,7 @@ public class SweetHomeDbContext(DbContextOptions<SweetHomeDbContext> options)
     public DbSet<MainWidget> MainWidgets { get; set; }
     public DbSet<HealthEntry> HealthEntries { get; set; }
     public DbSet<Movie> Movies { get; set; }
+    public DbSet<MovieShareSetting> MovieShareSettings { get; set; }
     public DbSet<SmartHomeRoom> SmartHomeRooms { get; set; }
     public DbSet<SmartHomeWidget> SmartHomeWidgets { get; set; }
     public DbSet<SmartHomeScenario> SmartHomeScenarios { get; set; }

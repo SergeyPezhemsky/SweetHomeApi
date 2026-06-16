@@ -4,5 +4,7 @@ public enum MovieContentType
 {
     MOVIE,
     CARTOON,
-    SERIES
+    SERIES,
+    ANIME,
+    DORAMA
 }
