@@ -25,6 +25,8 @@ public class WardrobeItem
     public bool IsFavorite { get; set; }
     public bool HasImage { get; set; }
     public DateTime? ImageUpdatedAt { get; set; }
+    public WardrobeImageStatus ImageStatus { get; set; } = WardrobeImageStatus.NONE;
+    public WardrobeImageVariant ImageVariant { get; set; } = WardrobeImageVariant.ORIGINAL;
     public int WearCount { get; set; }
     public DateTime? LastWornAt { get; set; }
     public DateTime CreatedAt { get; set; }

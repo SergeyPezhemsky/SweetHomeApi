@@ -16,6 +16,8 @@ public class WardrobeItemDto
     public bool IsFavorite { get; set; }
     public bool HasImage { get; set; }
     public DateTime? ImageUpdatedAt { get; set; }
+    public WardrobeImageStatus ImageStatus { get; set; }
+    public WardrobeImageVariant ImageVariant { get; set; }
     public int WearCount { get; set; }
     public DateTime? LastWornAt { get; set; }
     public DateTime CreatedAt { get; set; }
@@ -136,4 +138,9 @@ public class WardrobeOutfitDto
     public DateTime? LastWornAt { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
+}
+
+public class SetWardrobeImageVariantDto
+{
+    public string? Variant { get; set; }
 }

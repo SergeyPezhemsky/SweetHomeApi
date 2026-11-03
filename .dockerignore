@@ -26,3 +26,5 @@ TestResults
 !*.example
 appsettings.Local.json
 appsettings.Development.local.json
+
+flatlay

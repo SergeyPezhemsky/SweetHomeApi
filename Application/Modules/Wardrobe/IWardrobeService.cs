@@ -9,15 +9,19 @@ public interface IWardrobeService
     Task<bool> DeleteItemAsync(string userId, string itemId);
     Task<WardrobeItem?> WearItemAsync(string userId, string itemId);
 
-    Task<WardrobeOperationResult<WardrobeItemImage?>> GetImageAsync(string userId, string itemId);
+    /// <summary>Фото вещи: variant = null — выбранная версия (оригинал, пока обработка не готова).</summary>
+    Task<WardrobeOperationResult<WardrobeImageContent?>> GetImageAsync(string userId, string itemId, WardrobeImageVariant? variant);
     Task<WardrobeItem?> SetImageAsync(string userId, string itemId, byte[] data, string contentType);
     Task<WardrobeItem?> DeleteImageAsync(string userId, string itemId);
+    Task<WardrobeOperationResult<WardrobeItem>> SetImageVariantAsync(string userId, string itemId, WardrobeImageVariant variant);
+    Task<WardrobeOperationResult<WardrobeItem>> ReprocessImageAsync(string userId, string itemId);
 
     WardrobeClassification Classify(string? name, string? notes, string? colorHex);
     Task<OutfitSuggestionResult> SuggestOutfitsAsync(string userId, OutfitSuggestionRequest request);
 
     Task<List<WardrobeOutfitDetails>> GetOutfitsAsync(string userId);
     Task<WardrobeOperationResult<WardrobeOutfitDetails>> CreateOutfitAsync(string userId, WardrobeOutfit outfit);
+    Task<WardrobeOperationResult<WardrobeOutfitDetails>> UpdateOutfitAsync(string userId, string outfitId, WardrobeOutfit outfit);
     Task<bool> DeleteOutfitAsync(string userId, string outfitId);
     Task<WardrobeOutfitDetails?> WearOutfitAsync(string userId, string outfitId);
 }

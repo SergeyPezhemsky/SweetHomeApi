@@ -92,6 +92,16 @@ public class SweetHomeDbContext(DbContextOptions<SweetHomeDbContext> options)
             entity.Property(e => e.Category)
                 .HasConversion<string>();
 
+            entity.Property(e => e.ImageStatus)
+                .HasConversion<string>()
+                .HasDefaultValue(WardrobeImageStatus.NONE)
+                .HasSentinel(WardrobeImageStatus.NONE);
+
+            entity.Property(e => e.ImageVariant)
+                .HasConversion<string>()
+                .HasDefaultValue(WardrobeImageVariant.ORIGINAL)
+                .HasSentinel(WardrobeImageVariant.ORIGINAL);
+
             entity.Property(e => e.Colors).HasColumnType("text[]");
             entity.Property(e => e.Seasons).HasColumnType("text[]");
             entity.Property(e => e.Styles).HasColumnType("text[]");
@@ -106,6 +116,14 @@ public class SweetHomeDbContext(DbContextOptions<SweetHomeDbContext> options)
         builder.Entity<WardrobeItemImage>(entity =>
         {
             entity.HasKey(e => e.ItemId);
+
+            entity.Property(e => e.ProcessingStatus)
+                .HasConversion<string>()
+                .HasDefaultValue(WardrobeImageStatus.NONE)
+                .HasSentinel(WardrobeImageStatus.NONE);
+
+            entity.Property(e => e.Revision).HasDefaultValue(0);
+            entity.HasIndex(e => e.ProcessingStatus);
 
             entity
                 .HasOne(e => e.Item)

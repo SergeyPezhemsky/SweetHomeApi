@@ -150,13 +150,21 @@ public class WardrobeController(IWardrobeService wardrobeService, UserManager<Id
     }
 
     [HttpGet("items/{itemId}/image")]
-    public async Task<IActionResult> GetImage([FromRoute] string itemId)
+    public async Task<IActionResult> GetImage([FromRoute] string itemId, [FromQuery] string? variant)
     {
         var userId = GetUserId();
         if (userId is null)
             return Unauthorized();
 
-        var result = await wardrobeService.GetImageAsync(userId, itemId);
+        WardrobeImageVariant? requested = null;
+        if (!string.IsNullOrWhiteSpace(variant))
+        {
+            requested = ParseEnum<WardrobeImageVariant>(variant);
+            if (requested is null)
+                return BadRequest(ValidationError([new ErrorDetailDto { Field = "variant", Message = "Допустимо original или processed" }]));
+        }
+
+        var result = await wardrobeService.GetImageAsync(userId, itemId, requested);
         if (result.Status == WardrobeOperationStatus.NotFound)
             return NotFound(ItemNotFound());
 
@@ -167,6 +175,43 @@ public class WardrobeController(IWardrobeService wardrobeService, UserManager<Id
         Response.Headers.CacheControl = "private, max-age=86400";
         Response.Headers.XContentTypeOptions = "nosniff";
         return File(image.Data, image.ContentType);
+    }
+
+    [HttpPut("items/{itemId}/image/variant")]
+    public async Task<IActionResult> SetImageVariant([FromRoute] string itemId, [FromBody] SetWardrobeImageVariantDto dto)
+    {
+        var userId = GetUserId();
+        if (userId is null)
+            return Unauthorized();
+
+        var variant = ParseEnum<WardrobeImageVariant>(dto.Variant);
+        if (variant is null)
+            return BadRequest(ValidationError([new ErrorDetailDto { Field = "variant", Message = "Допустимо ORIGINAL или PROCESSED" }]));
+
+        var result = await wardrobeService.SetImageVariantAsync(userId, itemId, variant.Value);
+        return result.Status switch
+        {
+            WardrobeOperationStatus.NotFound => NotFound(ItemNotFound()),
+            WardrobeOperationStatus.NotReady => BadRequest(ValidationError(
+                [new ErrorDetailDto { Field = "variant", Message = "Фото без фона ещё не готово" }])),
+            _ => Ok(ToDto(result.Value!))
+        };
+    }
+
+    [HttpPost("items/{itemId}/image/reprocess")]
+    public async Task<IActionResult> ReprocessImage([FromRoute] string itemId)
+    {
+        var userId = GetUserId();
+        if (userId is null)
+            return Unauthorized();
+
+        var result = await wardrobeService.ReprocessImageAsync(userId, itemId);
+        return result.Status switch
+        {
+            WardrobeOperationStatus.NotFound => NotFound(ItemNotFound()),
+            WardrobeOperationStatus.NotReady => NotFound(Error("WARDROBE_IMAGE_NOT_FOUND", "Нет фото для обработки или обработка выключена")),
+            _ => Ok(ToDto(result.Value!))
+        };
     }
 
     [HttpPut("items/{itemId}/image")]
@@ -315,6 +360,27 @@ public class WardrobeController(IWardrobeService wardrobeService, UserManager<Id
         return Ok(outfits.Select(ToDto).ToList());
     }
 
+    [HttpPut("outfits/{outfitId}")]
+    public async Task<IActionResult> UpdateOutfit([FromRoute] string outfitId, [FromBody] CreateWardrobeOutfitDto dto)
+    {
+        var userId = GetUserId();
+        if (userId is null)
+            return Unauthorized();
+
+        var (outfit, details) = ValidateOutfit(dto);
+        if (details.Count > 0)
+            return BadRequest(ValidationError(details));
+
+        var result = await wardrobeService.UpdateOutfitAsync(userId, outfitId, outfit!);
+        return result.Status switch
+        {
+            WardrobeOperationStatus.NotFound => NotFound(OutfitNotFound()),
+            WardrobeOperationStatus.InvalidItems => BadRequest(ValidationError(
+                [new ErrorDetailDto { Field = "itemIds", Message = "Некоторые вещи не найдены в вашем гардеробе" }])),
+            _ => Ok(ToDto(result.Value!))
+        };
+    }
+
     [HttpPost("outfits")]
     public async Task<IActionResult> CreateOutfit([FromBody] CreateWardrobeOutfitDto dto)
     {
@@ -322,6 +388,23 @@ public class WardrobeController(IWardrobeService wardrobeService, UserManager<Id
         if (userId is null)
             return Unauthorized();
 
+        var (outfit, details) = ValidateOutfit(dto);
+        if (details.Count > 0)
+            return BadRequest(ValidationError(details));
+
+        var result = await wardrobeService.CreateOutfitAsync(userId, outfit!);
+
+        if (result.Status == WardrobeOperationStatus.InvalidItems)
+        {
+            return BadRequest(ValidationError(
+                [new ErrorDetailDto { Field = "itemIds", Message = "Некоторые вещи не найдены в вашем гардеробе" }]));
+        }
+
+        return StatusCode(StatusCodes.Status201Created, ToDto(result.Value!));
+    }
+
+    private (WardrobeOutfit? Outfit, List<ErrorDetailDto> Details) ValidateOutfit(CreateWardrobeOutfitDto dto)
+    {
         var details = new List<ErrorDetailDto>();
         if (string.IsNullOrWhiteSpace(dto.Name))
             details.Add(new ErrorDetailDto { Field = "name", Message = "Название обязательно" });
@@ -345,24 +428,16 @@ public class WardrobeController(IWardrobeService wardrobeService, UserManager<Id
             details.Add(new ErrorDetailDto { Field = "note", Message = "Заметка должна быть не длиннее 500 символов" });
 
         if (details.Count > 0)
-            return BadRequest(ValidationError(details));
+            return (null, details);
 
-        var result = await wardrobeService.CreateOutfitAsync(userId, new WardrobeOutfit
+        return (new WardrobeOutfit
         {
             Name = dto.Name!,
             ItemIds = itemIds,
             Occasion = occasion!.Value,
             Temperature = dto.Temperature,
             Note = dto.Note
-        });
-
-        if (result.Status == WardrobeOperationStatus.InvalidItems)
-        {
-            return BadRequest(ValidationError(
-                [new ErrorDetailDto { Field = "itemIds", Message = "Некоторые вещи не найдены в вашем гардеробе" }]));
-        }
-
-        return StatusCode(StatusCodes.Status201Created, ToDto(result.Value!));
+        }, details);
     }
 
     [HttpDelete("outfits/{outfitId}")]
@@ -525,6 +600,8 @@ public class WardrobeController(IWardrobeService wardrobeService, UserManager<Id
             IsFavorite = item.IsFavorite,
             HasImage = item.HasImage,
             ImageUpdatedAt = item.ImageUpdatedAt,
+            ImageStatus = item.ImageStatus,
+            ImageVariant = item.ImageVariant,
             WearCount = item.WearCount,
             LastWornAt = item.LastWornAt,
             CreatedAt = item.CreatedAt,

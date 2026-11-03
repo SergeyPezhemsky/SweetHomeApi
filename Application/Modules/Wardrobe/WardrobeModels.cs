@@ -29,7 +29,9 @@ public enum WardrobeOperationStatus
 {
     Ok,
     NotFound,
-    InvalidItems
+    InvalidItems,
+    /// <summary>Действие сейчас невозможно (например, выбрать фото без фона, пока оно не готово).</summary>
+    NotReady
 }
 
 public class WardrobeOperationResult<T>

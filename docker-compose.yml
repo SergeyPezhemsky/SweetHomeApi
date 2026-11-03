@@ -13,11 +13,23 @@ services:
       HomeAssistant__AccessToken: ${HOMEASSISTANT_ACCESS_TOKEN}
       HomeAssistant__RequestTimeoutSeconds: ${HOMEASSISTANT_REQUEST_TIMEOUT_SECONDS:-60}
       Swagger__Enabled: ${SWAGGER_ENABLED:-false}
+      # Удаление фона у фото гардероба; пустое значение выключает обработку.
+      Flatlay__BaseUrl: ${FLATLAY_BASE_URL-http://flatlay:8000}
     ports:
       - "${API_PORT:-5000}:8080"
     depends_on:
       postgres:
         condition: service_healthy
+      flatlay:
+        condition: service_started
+
+  # Удаление фона у фото вещей (rembg). Наружу не публикуется, API ходит по внутренней сети.
+  flatlay:
+    image: ${SWEETHOME_FLATLAY_IMAGE:-sweethome-flatlay:local}
+    build:
+      context: ./flatlay
+    restart: unless-stopped
+    mem_limit: ${FLATLAY_MEM_LIMIT:-2g}
 
   postgres:
     image: postgres:16-alpine

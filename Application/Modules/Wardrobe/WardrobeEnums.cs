@@ -18,6 +18,22 @@ public enum WardrobeSeason
     WINTER
 }
 
+/// <summary>Состояние обработки фото (удаление фона).</summary>
+public enum WardrobeImageStatus
+{
+    NONE,
+    PENDING,
+    READY,
+    FAILED
+}
+
+/// <summary>Какая версия фото показывается: оригинал или «чистая» без фона.</summary>
+public enum WardrobeImageVariant
+{
+    ORIGINAL,
+    PROCESSED
+}
+
 public enum WardrobeStyle
 {
     CASUAL,

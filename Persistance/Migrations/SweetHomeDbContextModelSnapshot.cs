@@ -358,8 +358,20 @@ namespace Persistance.Migrations
                     b.Property<bool>("HasImage")
                         .HasColumnType("boolean");
 
+                    b.Property<string>("ImageStatus")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValue("NONE");
+
                     b.Property<DateTime?>("ImageUpdatedAt")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ImageVariant")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValue("ORIGINAL");
 
                     b.Property<bool>("IsFavorite")
                         .HasColumnType("boolean");
@@ -421,10 +433,29 @@ namespace Persistance.Migrations
                         .IsRequired()
                         .HasColumnType("bytea");
 
+                    b.Property<string>("ProcessedContentType")
+                        .HasColumnType("text");
+
+                    b.Property<byte[]>("ProcessedData")
+                        .HasColumnType("bytea");
+
+                    b.Property<string>("ProcessingStatus")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValue("NONE");
+
+                    b.Property<int>("Revision")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0);
+
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
 
                     b.HasKey("ItemId");
+
+                    b.HasIndex("ProcessingStatus");
 
                     b.ToTable("WardrobeItemImages");
                 });

@@ -1,6 +1,9 @@
 namespace Application.Modules.Wardrobe;
 
-public class WardrobeService(IWardrobeRepository repository, TimeProvider? timeProvider = null) : IWardrobeService
+public class WardrobeService(
+    IWardrobeRepository repository,
+    TimeProvider? timeProvider = null,
+    IWardrobeImageQueue? imageQueue = null) : IWardrobeService
 {
     private readonly TimeProvider _time = timeProvider ?? TimeProvider.System;
 
@@ -93,14 +96,22 @@ public class WardrobeService(IWardrobeRepository repository, TimeProvider? timeP
         return await repository.GetItemAsNoTrackingAsync(userId, itemId);
     }
 
-    public async Task<WardrobeOperationResult<WardrobeItemImage?>> GetImageAsync(string userId, string itemId)
+    public async Task<WardrobeOperationResult<WardrobeImageContent?>> GetImageAsync(string userId, string itemId, WardrobeImageVariant? variant)
     {
-        var existing = await repository.GetItemAsync(userId, itemId);
+        var existing = await repository.GetItemAsNoTrackingAsync(userId, itemId);
         if (existing is null)
-            return WardrobeOperationResult<WardrobeItemImage?>.NotFound();
+            return WardrobeOperationResult<WardrobeImageContent?>.NotFound();
 
-        var image = existing.HasImage ? await repository.GetImageAsync(itemId) : null;
-        return WardrobeOperationResult<WardrobeItemImage?>.Ok(image);
+        if (!existing.HasImage)
+            return WardrobeOperationResult<WardrobeImageContent?>.Ok(null);
+
+        // Без явного запроса — выбранная версия; обработанной может ещё не быть, тогда оригинал.
+        var wanted = variant ?? existing.ImageVariant;
+        var image = await repository.GetImageAsync(itemId, wanted);
+        if (image is null && variant is null && wanted == WardrobeImageVariant.PROCESSED)
+            image = await repository.GetImageAsync(itemId, WardrobeImageVariant.ORIGINAL);
+
+        return WardrobeOperationResult<WardrobeImageContent?>.Ok(image);
     }
 
     public async Task<WardrobeItem?> SetImageAsync(string userId, string itemId, byte[] data, string contentType)
@@ -109,7 +120,39 @@ public class WardrobeService(IWardrobeRepository repository, TimeProvider? timeP
         if (existing is null)
             return null;
 
-        return await repository.SetImageAsync(existing, data, contentType) ? existing : null;
+        var queue = imageQueue is { IsEnabled: true };
+        if (!await repository.SetImageAsync(existing, data, contentType, queue))
+            return null;
+
+        if (queue)
+            imageQueue!.Enqueue(itemId);
+
+        return existing;
+    }
+
+    public async Task<WardrobeOperationResult<WardrobeItem>> SetImageVariantAsync(string userId, string itemId, WardrobeImageVariant variant)
+    {
+        var existing = await repository.GetItemAsync(userId, itemId);
+        if (existing is null)
+            return WardrobeOperationResult<WardrobeItem>.NotFound();
+
+        if (!existing.HasImage || !await repository.SetImageVariantAsync(existing, variant))
+            return new WardrobeOperationResult<WardrobeItem> { Status = WardrobeOperationStatus.NotReady };
+
+        return WardrobeOperationResult<WardrobeItem>.Ok(existing);
+    }
+
+    public async Task<WardrobeOperationResult<WardrobeItem>> ReprocessImageAsync(string userId, string itemId)
+    {
+        var existing = await repository.GetItemAsync(userId, itemId);
+        if (existing is null)
+            return WardrobeOperationResult<WardrobeItem>.NotFound();
+
+        if (imageQueue is not { IsEnabled: true } || !existing.HasImage || !await repository.MarkImagePendingAsync(existing))
+            return new WardrobeOperationResult<WardrobeItem> { Status = WardrobeOperationStatus.NotReady };
+
+        imageQueue.Enqueue(itemId);
+        return WardrobeOperationResult<WardrobeItem>.Ok(existing);
     }
 
     public async Task<WardrobeItem?> DeleteImageAsync(string userId, string itemId)
@@ -177,6 +220,35 @@ public class WardrobeService(IWardrobeRepository repository, TimeProvider? timeP
         {
             Outfit = outfit,
             Items = itemIds.Select(id => byId[id]).ToList()
+        });
+    }
+
+    public async Task<WardrobeOperationResult<WardrobeOutfitDetails>> UpdateOutfitAsync(string userId, string outfitId, WardrobeOutfit changes)
+    {
+        var outfit = await repository.GetOutfitAsNoTrackingAsync(userId, outfitId);
+        if (outfit is null)
+            return WardrobeOperationResult<WardrobeOutfitDetails>.NotFound();
+
+        var itemIds = changes.ItemIds.Where(x => !string.IsNullOrWhiteSpace(x)).Distinct().ToList();
+        if (itemIds.Count < 2)
+            return WardrobeOperationResult<WardrobeOutfitDetails>.InvalidItems();
+
+        outfit.Name = changes.Name.Trim();
+        outfit.ItemIds = itemIds;
+        outfit.Occasion = changes.Occasion;
+        outfit.Temperature = changes.Temperature;
+        outfit.Note = string.IsNullOrWhiteSpace(changes.Note) ? null : changes.Note.Trim();
+        outfit.UpdatedAt = UtcNow;
+
+        var status = await repository.UpdateOutfitAsync(outfit);
+        if (status != WardrobeOperationStatus.Ok)
+            return new WardrobeOperationResult<WardrobeOutfitDetails> { Status = status };
+
+        var items = (await repository.GetItemsByIdsAsNoTrackingAsync(userId, itemIds)).ToDictionary(x => x.Id);
+        return WardrobeOperationResult<WardrobeOutfitDetails>.Ok(new WardrobeOutfitDetails
+        {
+            Outfit = outfit,
+            Items = itemIds.Where(items.ContainsKey).Select(id => items[id]).ToList()
         });
     }
 

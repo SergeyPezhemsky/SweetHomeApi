@@ -9,7 +9,9 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using System.Text.Json.Serialization;
 using Application.Modules.HomeAssistant;
+using Application.Modules.Wardrobe;
 using Persistance;
+using SweetHomeApi.Infrastructure.Flatlay;
 using SweetHomeApi.Infrastructure.HomeAssistant;
 using SweetHomeApi.Infrastructure.Realtime;
 using SweetHomeApi.Registration;
@@ -29,6 +31,11 @@ builder.Services.RegisterApplicationServices();
 builder.Services.AddSingleton<IHomeRealtimeBroadcaster, HomeRealtimeBroadcaster>();
 builder.Services.Configure<HomeAssistantOptions>(builder.Configuration.GetSection("HomeAssistant"));
 builder.Services.AddHttpClient<IHomeAssistantClient, HomeAssistantClient>();
+builder.Services.Configure<FlatlayOptions>(builder.Configuration.GetSection("Flatlay"));
+builder.Services.AddHttpClient<IFlatlayClient, FlatlayClient>(client => client.Timeout = Timeout.InfiniteTimeSpan);
+builder.Services.AddSingleton<WardrobeImageQueue>();
+builder.Services.AddSingleton<IWardrobeImageQueue>(sp => sp.GetRequiredService<WardrobeImageQueue>());
+builder.Services.AddHostedService<WardrobeImageProcessingWorker>();
 
 // Добавляем сервисы Swagger
 builder.Services.AddEndpointsApiExplorer();
@@ -329,5 +336,18 @@ static void ApplyWardrobeSchemaGuard(SweetHomeDbContext context)
 
         CREATE INDEX IF NOT EXISTS "IX_WardrobeOutfits_UserId"
             ON "WardrobeOutfits" ("UserId");
+
+        ALTER TABLE "WardrobeItems"
+            ADD COLUMN IF NOT EXISTS "ImageStatus" text NOT NULL DEFAULT 'NONE',
+            ADD COLUMN IF NOT EXISTS "ImageVariant" text NOT NULL DEFAULT 'ORIGINAL';
+
+        ALTER TABLE "WardrobeItemImages"
+            ADD COLUMN IF NOT EXISTS "ProcessedData" bytea NULL,
+            ADD COLUMN IF NOT EXISTS "ProcessedContentType" text NULL,
+            ADD COLUMN IF NOT EXISTS "ProcessingStatus" text NOT NULL DEFAULT 'NONE',
+            ADD COLUMN IF NOT EXISTS "Revision" integer NOT NULL DEFAULT 0;
+
+        CREATE INDEX IF NOT EXISTS "IX_WardrobeItemImages_ProcessingStatus"
+            ON "WardrobeItemImages" ("ProcessingStatus");
         """);
 }
