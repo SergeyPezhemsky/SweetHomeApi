@@ -108,7 +108,19 @@ public static class OutfitGenerator
             if (own.Count > 0 || indoor)
                 return own;
 
-            return inSeason.Where(x => x.Category == category && x.Styles.Contains(casual) && fits(x)).ToList();
+            var fallback = inSeason.Where(x => x.Category == category && x.Styles.Contains(casual) && fits(x)).ToList();
+            return PreferSporty(fallback);
+        }
+
+        // Для спорта из повседневных вещей берём самые «неформальные»: пуховик, а не шубу или пальто.
+        List<WardrobeItem> PreferSporty(List<WardrobeItem> pool)
+        {
+            if (request.Occasion != WardrobeStyle.SPORT)
+                return pool;
+
+            var nonFormal = pool.Where(x => !x.Styles.Contains(nameof(WardrobeStyle.FORMAL))).ToList();
+            var plain = nonFormal.Where(x => !x.Styles.Contains(nameof(WardrobeStyle.OFFICE))).ToList();
+            return plain.Count > 0 ? plain : nonFormal.Count > 0 ? nonFormal : pool;
         }
 
         List<WardrobeItem> Best(IEnumerable<WardrobeItem> pool, double want) => pool
@@ -129,7 +141,7 @@ public static class OutfitGenerator
         // В сильный мороз — только тёплая обувь (не туфли и не кроссовки).
         // В лютый мороз (ниже −20) — только самая тёплая обувь, если она есть в гардеробе.
         var minShoeWarmth = indoor || temperature >= SevereFrostBelow ? 1
-            : temperature < -20 && inSeason.Any(x => x.Category == WardrobeCategory.SHOES && x.Warmth >= 5) ? 5
+            : temperature <= -18 && inSeason.Any(x => x.Category == WardrobeCategory.SHOES && x.Warmth >= 5) ? 5
             : 4;
         bool ShoesFit(WardrobeItem x) => Math.Abs(x.Warmth - desired) <= (indoor ? 1.5 : 2.0) && x.Warmth >= minShoeWarmth;
 
@@ -152,7 +164,7 @@ public static class OutfitGenerator
                 var own = suitable.Where(x => x.Category == WardrobeCategory.ACCESSORY && Warm(x)).ToList();
                 warmAccessories.AddRange(own.Count > 0
                     ? own
-                    : inSeason.Where(x => x.Category == WardrobeCategory.ACCESSORY && x.Styles.Contains(casual) && Warm(x)));
+                    : PreferSporty(inSeason.Where(x => x.Category == WardrobeCategory.ACCESSORY && x.Styles.Contains(casual) && Warm(x)).ToList()));
             }
         }
 
@@ -373,7 +385,9 @@ public static class OutfitGenerator
     /// </summary>
     public static int MinOuterwearWarmth(int temperature, int targetWarmth)
     {
-        return temperature < SevereFrostBelow ? 5 : Math.Max(1, targetWarmth - 1);
+        // Ниже −10 — только «очень тёплая», до +5 — не легче «тёплой» (не джинсовка и не тренч при +2),
+        // дальше допускаем на ступень легче нужной.
+        return temperature < SevereFrostBelow ? 5 : temperature <= 5 ? 4 : Math.Max(1, targetWarmth - 1);
     }
 
     public static WardrobeSeason ResolveSeason(int? temperature, DateTime nowUtc)

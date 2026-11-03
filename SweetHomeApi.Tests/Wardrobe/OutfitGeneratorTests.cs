@@ -169,6 +169,51 @@ public class OutfitGeneratorTests
     }
 
     [Fact]
+    public void SportInCold_PrefersPufferOverFurOrCoat()
+    {
+        var wardrobe = new List<WardrobeItem>
+        {
+            Item("hoodie", WardrobeCategory.TOP, 3, "GRAY", ["CASUAL", "SPORT"]),
+            Item("joggers", WardrobeCategory.BOTTOM, 3, "BLACK", ["CASUAL", "SPORT"]),
+            Item("winter-boots", WardrobeCategory.SHOES, 5, "BLACK", ["CASUAL", "OFFICE"]),
+            Item("fur-coat", WardrobeCategory.OUTERWEAR, 5, "BROWN", ["CASUAL", "FORMAL"]),
+            Item("wool-coat", WardrobeCategory.OUTERWEAR, 4, "BEIGE", ["CASUAL", "OFFICE", "FORMAL"]),
+            Item("puffer", WardrobeCategory.OUTERWEAR, 5, "BLACK", ["CASUAL"])
+        };
+
+        var result = OutfitGenerator.Generate(wardrobe, new OutfitSuggestionRequest
+        {
+            Occasion = WardrobeStyle.SPORT,
+            Temperature = -5,
+            Count = 3
+        }, Now);
+
+        Assert.NotEmpty(result.Outfits);
+        Assert.All(result.Outfits, o => Assert.Contains(o.Items, x => x.Id == "puffer"));
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(3)]
+    [InlineData(5)]
+    public void NearZero_NoLightJackets(int temperature)
+    {
+        var wardrobe = CasualWardrobe();
+        wardrobe.Add(Item("denim-jacket", WardrobeCategory.OUTERWEAR, 3, "BLUE"));
+        wardrobe.Add(Item("trench", WardrobeCategory.OUTERWEAR, 3, "BEIGE"));
+
+        var result = OutfitGenerator.Generate(wardrobe, new OutfitSuggestionRequest
+        {
+            Occasion = WardrobeStyle.CASUAL,
+            Temperature = temperature,
+            Count = 5
+        }, Now);
+
+        Assert.All(result.Outfits, o =>
+            Assert.True(o.Items.Single(x => x.Category == WardrobeCategory.OUTERWEAR).Warmth >= 4));
+    }
+
+    [Fact]
     public void Tie_IsNeverAddedToDress()
     {
         var wardrobe = new List<WardrobeItem>

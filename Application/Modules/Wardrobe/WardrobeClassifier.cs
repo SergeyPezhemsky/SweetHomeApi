@@ -94,7 +94,9 @@ public static class WardrobeClassifier
         new(["комбинезон", "jumpsuit"], WardrobeCategory.DRESS, 2, AllSeasons, [Casual]),
 
         // Верхняя одежда
-        new(["пуховик", "пуховичок", "полушуб", "дубленоч", "puffer", "down jacket", "puffer jacket", "дубленк", "шуб", "parka", "парка"], WardrobeCategory.OUTERWEAR, 5, [Winter], [Casual]),
+        new(["пуховик", "пуховичок", "puffer", "down jacket", "puffer jacket", "parka", "парка"], WardrobeCategory.OUTERWEAR, 5, [Winter], [Casual, Sport]),
+        // Шуба и дублёнка — тёплые, но нарядные: в спортивный образ их не берём.
+        new(["шуб", "полушуб", "дубленк", "дубленоч", "fur coat", "sheepskin"], WardrobeCategory.OUTERWEAR, 5, [Winter], [Casual, Formal]),
         new(["пальто", "пальтишк", "coat", "overcoat", "peacoat", "topcoat", "полупальто"], WardrobeCategory.OUTERWEAR, 4, [Spring, Autumn, Winter], [Casual, Office, Formal]),
         new(["куртк", "курточ", "джинсовк", "jacket", "анорак", "anorak"], WardrobeCategory.OUTERWEAR, 4, [Spring, Autumn, Winter], [Casual]),
         new(["плащ", "тренч", "пончо", "poncho", "trench", "trench coat", "raincoat"], WardrobeCategory.OUTERWEAR, 3, Demi, [Casual, Office]),
@@ -106,7 +108,8 @@ public static class WardrobeClassifier
         // Обувь
         new(["кроссовк", "кроссовоч", "кроссы", "сникерс", "слипон", "sneaker", "trainer", "runner", "slip-on", "shoe"], WardrobeCategory.SHOES, 2, [Spring, Summer, Autumn], [Casual, Sport]),
         new(["кеды", "кед", "кедики", "converse"], WardrobeCategory.SHOES, 2, Warm, [Casual], ExactOnly: true),
-        new(["ботин", "полусапож", "ботильон", "boot", "челси", "chelsea", "берц", "тимберленд", "мартинс", "martens", "казаки"], WardrobeCategory.SHOES, 4, [Spring, Autumn, Winter], [Casual, Office]),
+        new(["ботильон"], WardrobeCategory.SHOES, 4, [Spring, Autumn, Winter], [Casual, Office, Formal]),
+        new(["ботин", "полусапож", "boot", "челси", "chelsea", "берц", "тимберленд", "мартинс", "martens", "казаки"], WardrobeCategory.SHOES, 4, [Spring, Autumn, Winter], [Casual, Office]),
         new(["сапог", "сапож", "snow boot", "ботфорт", "валенк", "угги", "ugg", "дутик"], WardrobeCategory.SHOES, 5, [Winter], [Casual, Office]),
         new(["туфл", "туфельк", "лодочк", "шпильк", "heels", "heel", "pumps", "oxford", "оксфорд", "дерби", "derby", "броги", "brogue", "dress shoe", "oxford shoe", "derby shoe", "leather shoe"], WardrobeCategory.SHOES, 2, [Spring, Summer, Autumn], [Office, Formal]),
         new(["лофер", "loafer", "мокасин", "moccasin", "балетк", "ballet", "мюли", "сабо", "mules", "clogs"], WardrobeCategory.SHOES, 2, [Spring, Summer, Autumn], [Casual, Office]),
@@ -118,7 +121,8 @@ public static class WardrobeClassifier
         new(["шарф", "снуд", "палантин", "scarf"], WardrobeCategory.ACCESSORY, 4, Cold, [Casual, Office]),
         new(["перчат", "варежк", "gloves", "mittens"], WardrobeCategory.ACCESSORY, 4, [Winter], [Casual, Office]),
         new(["кепк", "кепоч", "кепи", "бейсболк", "панам", "cap", "панама"], WardrobeCategory.ACCESSORY, 1, [Summer], [Casual, Sport]),
-        new(["шляп", "hat", "берет", "beret"], WardrobeCategory.ACCESSORY, 2, AllSeasons, [Casual]),
+        new(["шляп", "hat"], WardrobeCategory.ACCESSORY, 2, AllSeasons, [Casual]),
+        new(["берет", "beret"], WardrobeCategory.ACCESSORY, 3, [Spring, Autumn, Winter], [Casual, Office]),
         new(["галстук", "tie", "бабочк", "bowtie"], WardrobeCategory.ACCESSORY, 1, AllSeasons, [Office, Formal]),
         new(["ремень", "ремн", "пояс", "belt"], WardrobeCategory.ACCESSORY, 1, AllSeasons, [Casual, Office, Formal]),
         new(["сумк", "сумоч", "рюкзак", "рюкзач", "клатч", "bag", "handbag", "tote", "backpack", "clutch"], WardrobeCategory.ACCESSORY, 1, AllSeasons, [Casual, Office]),
@@ -131,7 +135,7 @@ public static class WardrobeClassifier
         // Шерстяное пальто теплее обычного, но не «пуховик»: для верхней одежды не выше 4.
         new(["шерст", "wool", "woolen", "woollen", "кашемир", "cashmere", "мохер", "ангор", "вязан", "knit", "knitted"], WarmthDelta: 1, Seasons: Cold, OuterwearCap: 4),
         // Флис, деним и кожа греют меньше пуховика: такая верхняя одежда — межсезонная.
-        new(["флис", "fleece"], WarmthDelta: 1, Seasons: Cold, OuterwearCap: 3, Demi: true),
+        new(["флис", "fleece"], WarmthDelta: 1, Seasons: Cold, Styles: [Casual], OuterwearCap: 3, Demi: true),
         // Кожа и замш — про материал, а не про сезон: зимние кожаные сапоги остаются зимними (см. WinterSignal).
         new(["джинсов", "denim", "деним", "кожан", "кожзам", "leather", "замш", "suede"], OuterwearCap: 3, Demi: true),
         // Резиновые сапоги и дождевики — от дождя, а не от мороза.
@@ -144,12 +148,14 @@ public static class WardrobeClassifier
         new(["пухов"], WarmthDelta: 1, Seasons: [Winter], WinterSignal: true),
         new(["летн", "summer"], WarmthDelta: -1, Seasons: [Summer]),
         new(["легк", "тонк", "light", "thin"], WarmthDelta: -1),
-        new(["льнян", "linen", "шелк", "silk", "сетк"], WarmthDelta: -1, Seasons: Warm, SkipForAccessories: true),
+        new(["льнян", "linen", "сетк"], WarmthDelta: -1, Seasons: Warm, SkipForAccessories: true),
+        // Шёлк лёгкий, но шёлковую блузку носят в офис круглый год.
+        new(["шелк", "silk"], WarmthDelta: -1, SkipForAccessories: true),
         new(["лен"], WarmthDelta: -1, Seasons: Warm, ExactOnly: true, SkipForAccessories: true),
-        new(["карго", "cargo"], Styles: [Casual]),
+        new(["карго", "cargo", "фланел", "flannel", "трекинг", "хайкинг", "hiking", "trekking"], Styles: [Casual]),
         new(["осенн", "autumn", "fall"], Seasons: [Autumn]),
         new(["весенн", "spring"], Seasons: [Spring]),
-        new(["спорт", "sport", "sports", "athletic", "трениров", "беговы", "running", "фитнес", "gym", "йог", "yoga"], Styles: [Sport]),
+        new(["спорт", "sport", "sports", "athletic", "трениров", "беговы", "бега", "running", "фитнес", "gym", "йог", "yoga"], Styles: [Sport]),
         new(["офис", "делов", "office", "business", "классич", "classic"], Styles: [Office, Formal]),
         new(["вечерн", "праздн", "коктейл", "evening", "formal", "party", "нарядн"], Styles: [Formal]),
         new(["домашн", "home", "пижам", "pajama", "lounge"], Styles: [Home])
@@ -174,7 +180,7 @@ public static class WardrobeClassifier
         new(["оливк", "olive", "хаки", "милитари"], "OLIVE"),
         new(["зелен", "green", "изумруд", "мятн", "mint", "teal", "салатов"], "GREEN"),
         new(["фиолет", "purple", "violet", "сиренев", "лилов", "lilac", "лаванд", "lavender"], "PURPLE"),
-        new(["принт", "print", "printed", "цветочн", "цветоч", "floral", "леопард", "leopard", "клетк", "клетчат", "plaid", "checked", "полоск", "striped", "stripe", "пестр", "разноцвет", "multicolor", "multicolored", "камуфляж", "camo", "tiedye", "горош", "polkadot"], "MULTI")
+        new(["принт", "print", "printed", "цветочн", "цветоч", "floral", "леопард", "leopard", "клетк", "клетчат", "plaid", "checked", "полоск", "полосат", "тельняш", "striped", "stripe", "пестр", "разноцвет", "multicolor", "multicolored", "камуфляж", "camo", "tiedye", "горош", "polkadot"], "MULTI")
     ];
 
     private static readonly (string From, string To)[] CompoundReplacements =
