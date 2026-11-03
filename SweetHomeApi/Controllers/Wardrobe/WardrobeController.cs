@@ -15,7 +15,10 @@ namespace SweetHomeApi.Controllers.Wardrobe;
 [Authorize]
 [Route("api/v1/wardrobe")]
 [WardrobeModelStateErrors]
-public class WardrobeController(IWardrobeService wardrobeService, UserManager<IdentityUser> userManager) : ControllerBase
+public class WardrobeController(
+    IWardrobeService wardrobeService,
+    UserManager<IdentityUser> userManager,
+    IWardrobeImageQueue imageQueue) : ControllerBase
 {
     public const int MaxImageBytes = 5 * 1024 * 1024;
     private const int MaxRequestBytes = MaxImageBytes + 512 * 1024;
@@ -39,7 +42,8 @@ public class WardrobeController(IWardrobeService wardrobeService, UserManager<Id
             {
                 Level = x.Level,
                 Name = x.Name
-            }).ToList()
+            }).ToList(),
+            BackgroundRemoval = imageQueue.IsEnabled
         });
     }
 
@@ -192,6 +196,7 @@ public class WardrobeController(IWardrobeService wardrobeService, UserManager<Id
         return result.Status switch
         {
             WardrobeOperationStatus.NotFound => NotFound(ItemNotFound()),
+            WardrobeOperationStatus.NoImage => NotFound(ImageNotFound()),
             WardrobeOperationStatus.NotReady => BadRequest(ValidationError(
                 [new ErrorDetailDto { Field = "variant", Message = "Фото без фона ещё не готово" }])),
             _ => Ok(ToDto(result.Value!))
@@ -209,7 +214,9 @@ public class WardrobeController(IWardrobeService wardrobeService, UserManager<Id
         return result.Status switch
         {
             WardrobeOperationStatus.NotFound => NotFound(ItemNotFound()),
-            WardrobeOperationStatus.NotReady => NotFound(Error("WARDROBE_IMAGE_NOT_FOUND", "Нет фото для обработки или обработка выключена")),
+            WardrobeOperationStatus.NoImage => NotFound(ImageNotFound()),
+            WardrobeOperationStatus.Disabled => StatusCode(StatusCodes.Status503ServiceUnavailable,
+                Error("WARDROBE_BACKGROUND_REMOVAL_DISABLED", "Удаление фона выключено")),
             _ => Ok(ToDto(result.Value!))
         };
     }

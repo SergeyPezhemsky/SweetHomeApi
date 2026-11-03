@@ -20,8 +20,6 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-      flatlay:
-        condition: service_started
 
   # Удаление фона у фото вещей (rembg). Наружу не публикуется, API ходит по внутренней сети.
   flatlay:
@@ -29,7 +27,7 @@ services:
     build:
       context: ./flatlay
     restart: unless-stopped
-    mem_limit: ${FLATLAY_MEM_LIMIT:-2g}
+    mem_limit: ${FLATLAY_MEM_LIMIT:-1536m}
 
   postgres:
     image: postgres:16-alpine

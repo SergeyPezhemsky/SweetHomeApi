@@ -349,5 +349,7 @@ static void ApplyWardrobeSchemaGuard(SweetHomeDbContext context)
 
         CREATE INDEX IF NOT EXISTS "IX_WardrobeItemImages_ProcessingStatus"
             ON "WardrobeItemImages" ("ProcessingStatus");
+
+        CREATE SEQUENCE IF NOT EXISTS "WardrobeImageRevisionSeq" AS integer CYCLE;
         """);
 }

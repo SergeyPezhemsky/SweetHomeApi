@@ -4,7 +4,8 @@ FROM python:3.12-slim
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     U2NET_HOME=/models \
-    OMP_NUM_THREADS=2
+    OMP_NUM_THREADS=2 \
+    MALLOC_ARENA_MAX=2
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends libglib2.0-0 curl \

@@ -78,7 +78,9 @@ def white_balance(bgr, mask):
         return bgr
     px = bgr[bg].astype(np.float32)
     lum = px.mean(1)
-    px = px[lum > np.percentile(lum, 50)]  # светлая часть фона — эталон белого
+    # светлая часть фона — эталон белого; >= а не >: на однотонном фоне (фото из магазина на чистом белом)
+    # строгое сравнение оставляло пустую выборку, коэффициенты становились NaN и вещь получалась чёрной
+    px = px[lum >= np.percentile(lum, 50)]
     mean = px.mean(0)
     gain = mean.mean() / np.maximum(mean, 1)
     gain = np.clip(gain, 0.8, 1.25)

@@ -113,9 +113,11 @@ public class WardrobeImageProcessingWorker(
                     logger.LogInformation("Wardrobe image {ItemId} changed during processing; result discarded", itemId);
                 return;
             }
-            catch (HttpRequestException ex) when (attempt < attempts && ex.StatusCode is null or >= System.Net.HttpStatusCode.InternalServerError)
+            catch (HttpRequestException ex) when (attempt < attempts && ex.StatusCode is null or System.Net.HttpStatusCode.ServiceUnavailable
+                                                  or System.Net.HttpStatusCode.BadGateway)
             {
-                // Сервис ещё не поднялся (после деплоя) или временно недоступен — подождём и повторим.
+                // Сервис ещё не поднялся (после деплоя, перезапуск контейнера) — подождём и повторим.
+                // Ошибку обработки (500) не повторяем: на том же фото она повторится, а очередь будет стоять.
                 logger.LogWarning(ex, "Flatlay unavailable (attempt {Attempt}/{Attempts}) for {ItemId}", attempt, attempts, itemId);
                 await Task.Delay(TimeSpan.FromSeconds(options.Value.RetryDelaySeconds), stoppingToken);
             }

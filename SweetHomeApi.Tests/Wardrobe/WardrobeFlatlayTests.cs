@@ -100,6 +100,60 @@ public class WardrobeFlatlayTests
     }
 
     [Fact]
+    public async Task ResultForDeletedAndReuploadedPhotoIsDiscarded()
+    {
+        var repository = new FakeWardrobeRepository();
+        var item = repository.AddItem("item-1");
+        var service = new WardrobeService(repository, imageQueue: new FakeQueue(enabled: true));
+        await service.SetImageAsync(UserId, item.Id, B(1), "image/png");
+
+        var worker = CreateWorker(repository, new FakeFlatlayClient(async _ =>
+        {
+            // Пока обрабатывается фото A, его удаляют и загружают B: строка фото создаётся заново.
+            await service.DeleteImageAsync(UserId, item.Id);
+            await service.SetImageAsync(UserId, item.Id, B(2), "image/png");
+            return B(7);
+        }));
+
+        await worker.ProcessAsync(item.Id, CancellationToken.None);
+
+        Assert.Equal(WardrobeImageStatus.PENDING, item.ImageStatus);
+        Assert.Null((await service.GetImageAsync(UserId, item.Id, WardrobeImageVariant.PROCESSED)).Value);
+        Assert.Equal(B(2), (await service.GetImageAsync(UserId, item.Id, null)).Value!.Data);
+    }
+
+    [Fact]
+    public async Task ServerErrorIsNotRetried()
+    {
+        var repository = new FakeWardrobeRepository();
+        var item = repository.AddItem("item-1");
+        var service = new WardrobeService(repository, imageQueue: new FakeQueue(enabled: true));
+        await service.SetImageAsync(UserId, item.Id, B(1), "image/png");
+        var calls = 0;
+        var client = new FakeFlatlayClient(_ =>
+        {
+            calls++;
+            throw new HttpRequestException("boom", null, System.Net.HttpStatusCode.InternalServerError);
+        });
+
+        await CreateWorker(repository, client, retries: 3).ProcessAsync(item.Id, CancellationToken.None);
+
+        Assert.Equal(1, calls);
+        Assert.Equal(WardrobeImageStatus.FAILED, item.ImageStatus);
+    }
+
+    [Fact]
+    public async Task VariantWithoutPhotoReportsNoImage()
+    {
+        var repository = new FakeWardrobeRepository();
+        var item = repository.AddItem("item-1");
+        var service = new WardrobeService(repository, imageQueue: new FakeQueue(enabled: true));
+
+        Assert.Equal(WardrobeOperationStatus.NoImage,
+            (await service.SetImageVariantAsync(UserId, item.Id, WardrobeImageVariant.ORIGINAL)).Status);
+    }
+
+    [Fact]
     public async Task NothingFoundOrErrorMarksFailedAndKeepsOriginal()
     {
         var repository = new FakeWardrobeRepository();
@@ -150,13 +204,13 @@ public class WardrobeFlatlayTests
         var enabledQueue = new FakeQueue(enabled: true);
 
         var noPhoto = await new WardrobeService(repository, imageQueue: enabledQueue).ReprocessImageAsync(UserId, item.Id);
-        Assert.Equal(WardrobeOperationStatus.NotReady, noPhoto.Status);
+        Assert.Equal(WardrobeOperationStatus.NoImage, noPhoto.Status);
 
         await new WardrobeService(repository, imageQueue: enabledQueue).SetImageAsync(UserId, item.Id, [1], "image/png");
         await repository.MarkImageProcessingFailedAsync(item.Id, repository.Images[item.Id].Revision);
 
         var disabled = await new WardrobeService(repository, imageQueue: new FakeQueue(enabled: false)).ReprocessImageAsync(UserId, item.Id);
-        Assert.Equal(WardrobeOperationStatus.NotReady, disabled.Status);
+        Assert.Equal(WardrobeOperationStatus.Disabled, disabled.Status);
 
         var retried = await new WardrobeService(repository, imageQueue: enabledQueue).ReprocessImageAsync(UserId, item.Id);
         Assert.Equal(WardrobeOperationStatus.Ok, retried.Status);
@@ -200,6 +254,7 @@ public class WardrobeFlatlayTests
     {
         public Dictionary<string, WardrobeItem> Items { get; } = [];
         public Dictionary<string, WardrobeItemImage> Images { get; } = [];
+        private int _revisionSequence;
 
         public WardrobeItem AddItem(string id)
         {
@@ -226,7 +281,7 @@ public class WardrobeFlatlayTests
         public Task<bool> SetImageAsync(WardrobeItem item, byte[] data, string contentType, bool queueProcessing)
         {
             var status = queueProcessing ? WardrobeImageStatus.PENDING : WardrobeImageStatus.NONE;
-            var revision = Images.TryGetValue(item.Id, out var old) ? old.Revision + 1 : 1;
+            var revision = ++_revisionSequence;
             Images[item.Id] = new WardrobeItemImage
             {
                 ItemId = item.Id,
@@ -264,8 +319,10 @@ public class WardrobeFlatlayTests
         {
             if (!Images.TryGetValue(item.Id, out var image))
                 return Task.FromResult(false);
+            if (image.ProcessingStatus == WardrobeImageStatus.PENDING)
+                return Task.FromResult(true);
 
-            image.Revision++;
+            image.Revision = ++_revisionSequence;
             image.ProcessingStatus = WardrobeImageStatus.PENDING;
             item.ImageStatus = WardrobeImageStatus.PENDING;
             return Task.FromResult(true);

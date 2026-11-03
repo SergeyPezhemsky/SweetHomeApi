@@ -71,6 +71,8 @@ public class WardrobeDictionariesDto
     public List<WardrobeDictionaryItemDto> Styles { get; set; } = [];
     public List<WardrobeColorDto> Colors { get; set; } = [];
     public List<WardrobeWarmthLevelDto> WarmthLevels { get; set; } = [];
+    /// <summary>Включено ли автоматическое удаление фона у фото.</summary>
+    public bool BackgroundRemoval { get; set; }
 }
 
 public class ClassifyWardrobeItemDto

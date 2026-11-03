@@ -136,7 +136,10 @@ public class WardrobeService(
         if (existing is null)
             return WardrobeOperationResult<WardrobeItem>.NotFound();
 
-        if (!existing.HasImage || !await repository.SetImageVariantAsync(existing, variant))
+        if (!existing.HasImage)
+            return new WardrobeOperationResult<WardrobeItem> { Status = WardrobeOperationStatus.NoImage };
+
+        if (!await repository.SetImageVariantAsync(existing, variant))
             return new WardrobeOperationResult<WardrobeItem> { Status = WardrobeOperationStatus.NotReady };
 
         return WardrobeOperationResult<WardrobeItem>.Ok(existing);
@@ -148,8 +151,14 @@ public class WardrobeService(
         if (existing is null)
             return WardrobeOperationResult<WardrobeItem>.NotFound();
 
-        if (imageQueue is not { IsEnabled: true } || !existing.HasImage || !await repository.MarkImagePendingAsync(existing))
-            return new WardrobeOperationResult<WardrobeItem> { Status = WardrobeOperationStatus.NotReady };
+        if (!existing.HasImage)
+            return new WardrobeOperationResult<WardrobeItem> { Status = WardrobeOperationStatus.NoImage };
+
+        if (imageQueue is not { IsEnabled: true })
+            return new WardrobeOperationResult<WardrobeItem> { Status = WardrobeOperationStatus.Disabled };
+
+        if (!await repository.MarkImagePendingAsync(existing))
+            return new WardrobeOperationResult<WardrobeItem> { Status = WardrobeOperationStatus.NoImage };
 
         imageQueue.Enqueue(itemId);
         return WardrobeOperationResult<WardrobeItem>.Ok(existing);

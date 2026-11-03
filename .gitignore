@@ -49,3 +49,7 @@ _deploy/*.zip
 _deploy/publish/
 
 scripts/
+
+# Python
+__pycache__/
+*.pyc

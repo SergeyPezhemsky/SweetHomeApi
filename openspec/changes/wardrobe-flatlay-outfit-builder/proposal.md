@@ -12,4 +12,4 @@ Photos of clothes taken at home have cluttered backgrounds and uneven light, so 
 ## Impact
 - Affected spec: `wardrobe`.
 - Affected code: `flatlay/` (new), `docker-compose.yml`, `Application.Modules.Wardrobe`, `Persistance` (migration), `SweetHomeApi` (controller, background worker, options), client `wardrobe-module`.
-- Ops: the VPS builds one more image (~1.2 GB with the model) and the container needs up to ~1.5 GB RAM while processing.
+- Ops: the VPS builds one more image (~1.2 GB with the model) and the container needs ~1.2 GB RAM at peak (warm-up), ~0.5 GB steady.

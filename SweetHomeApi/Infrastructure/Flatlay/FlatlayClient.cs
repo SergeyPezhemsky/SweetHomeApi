@@ -23,9 +23,14 @@ public class FlatlayClient(HttpClient httpClient, IOptions<FlatlayOptions> optio
 
         using var response = await httpClient.PostAsync($"{baseUrl}/process", content, timeout.Token);
 
-        // 422 — сервис не нашёл на фото вещь: это не ошибка, просто оставляем оригинал.
+        // 422 с кодом NOTHING_FOUND — на фото не нашлось вещи: это не сбой, просто оставляем оригинал.
+        // Другие 422 (например, ошибка формата запроса) — настоящая ошибка.
         if (response.StatusCode == HttpStatusCode.UnprocessableEntity)
-            return null;
+        {
+            var body = await response.Content.ReadAsStringAsync(timeout.Token);
+            if (body.Contains("NOTHING_FOUND", StringComparison.Ordinal))
+                return null;
+        }
 
         response.EnsureSuccessStatusCode();
         return await response.Content.ReadAsByteArrayAsync(timeout.Token);

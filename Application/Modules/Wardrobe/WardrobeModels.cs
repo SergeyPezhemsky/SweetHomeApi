@@ -31,7 +31,11 @@ public enum WardrobeOperationStatus
     NotFound,
     InvalidItems,
     /// <summary>Действие сейчас невозможно (например, выбрать фото без фона, пока оно не готово).</summary>
-    NotReady
+    NotReady,
+    /// <summary>У вещи нет фото.</summary>
+    NoImage,
+    /// <summary>Удаление фона выключено в настройках сервера.</summary>
+    Disabled
 }
 
 public class WardrobeOperationResult<T>

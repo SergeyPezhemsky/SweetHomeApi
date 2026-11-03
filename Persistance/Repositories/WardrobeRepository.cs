@@ -180,11 +180,12 @@ public class WardrobeRepository(SweetHomeDbContext context) : IWardrobeRepositor
         try
         {
             // Upsert одной командой: две одновременные первые загрузки не падают на первичном ключе.
-            // Новая ревизия делает недействительным результат обработки предыдущего фото.
+            // Ревизия берётся из общей последовательности, а не «+1»: после удаления фото строка создаётся
+            // заново, и счётчик с единицы совпал бы с ревизией ещё идущей обработки старого фото.
             await context.Database.ExecuteSqlInterpolatedAsync($"""
                 INSERT INTO "WardrobeItemImages"
                     ("ItemId", "Data", "ContentType", "UpdatedAt", "ProcessedData", "ProcessedContentType", "ProcessingStatus", "Revision")
-                VALUES ({item.Id}, {data}, {contentType}, {now}, NULL, NULL, {statusText}, 1)
+                VALUES ({item.Id}, {data}, {contentType}, {now}, NULL, NULL, {statusText}, nextval('"WardrobeImageRevisionSeq"')::integer)
                 ON CONFLICT ("ItemId") DO UPDATE
                 SET "Data" = EXCLUDED."Data",
                     "ContentType" = EXCLUDED."ContentType",
@@ -192,7 +193,7 @@ public class WardrobeRepository(SweetHomeDbContext context) : IWardrobeRepositor
                     "ProcessedData" = NULL,
                     "ProcessedContentType" = NULL,
                     "ProcessingStatus" = EXCLUDED."ProcessingStatus",
-                    "Revision" = "WardrobeItemImages"."Revision" + 1
+                    "Revision" = EXCLUDED."Revision"
                 """);
         }
         catch (PostgresException ex) when (ex.SqlState == PostgresErrorCodes.ForeignKeyViolation)
@@ -280,16 +281,31 @@ public class WardrobeRepository(SweetHomeDbContext context) : IWardrobeRepositor
         await using var transaction = await context.Database.BeginTransactionAsync();
         await LockItemImageAsync(item.Id);
 
-        // Повтор — новая ревизия: если старая обработка ещё идёт, её результат будет отброшен.
-        var images = await context.WardrobeItemImages
+        var current = await context.WardrobeItemImages
+            .AsNoTracking()
             .Where(x => x.ItemId == item.Id)
-            .ExecuteUpdateAsync(setters => setters
-                .SetProperty(x => x.ProcessingStatus, WardrobeImageStatus.PENDING)
-                .SetProperty(x => x.ProcessedData, (byte[]?)null)
-                .SetProperty(x => x.ProcessedContentType, (string?)null)
-                .SetProperty(x => x.Revision, x => x.Revision + 1));
-        if (images == 0)
+            .Select(x => (WardrobeImageStatus?)x.ProcessingStatus)
+            .FirstOrDefaultAsync();
+        if (current is null)
             return false;
+
+        // Уже в очереди — повторный клик не запускает ещё одну обработку того же фото.
+        if (current == WardrobeImageStatus.PENDING)
+        {
+            await transaction.CommitAsync();
+            item.ImageStatus = WardrobeImageStatus.PENDING;
+            return true;
+        }
+
+        // Новая ревизия: результат обработки, которая могла ещё идти, будет отброшен.
+        await context.Database.ExecuteSqlInterpolatedAsync($"""
+            UPDATE "WardrobeItemImages"
+            SET "ProcessingStatus" = {WardrobeImageStatus.PENDING.ToString()},
+                "ProcessedData" = NULL,
+                "ProcessedContentType" = NULL,
+                "Revision" = nextval('"WardrobeImageRevisionSeq"')::integer
+            WHERE "ItemId" = {item.Id}
+            """);
 
         await context.WardrobeItems
             .Where(x => x.Id == item.Id)
