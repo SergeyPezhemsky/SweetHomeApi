@@ -47,8 +47,7 @@ builder.Services.AddCors(options =>
                     }
 
                     return uri.IsLoopback
-                        || uri.Host == "87.242.102.150"
-                        || uri.Host == "176.109.109.155";
+                        || uri.Host == "176.123.163.67";
                 })
                 .AllowAnyHeader()
                 .AllowAnyMethod()

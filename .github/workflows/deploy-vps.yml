@@ -32,8 +32,8 @@ jobs:
               sudo openssl req -x509 -nodes -newkey rsa:2048 -days 3650 \
                 -keyout /etc/ssl/sweethome/selfsigned.key \
                 -out /etc/ssl/sweethome/selfsigned.crt \
-                -subj "/CN=176.109.109.155" \
-                -addext "subjectAltName=IP:176.109.109.155"
+                -subj "/CN=${{ secrets.VPS_HOST }}" \
+                -addext "subjectAltName=IP:${{ secrets.VPS_HOST }}"
             fi
 
             printf '%s\n' \
