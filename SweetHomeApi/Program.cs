@@ -101,12 +101,12 @@ app.UseHttpsRedirection();
 app.UseRouting();
 app.UseCors("AllowSpecificOrigin");
 
-// Включаем Swagger и его пользовательский интерфейс
-//if (app.Environment.IsDevelopment())
-//{
+// Swagger только в Development или при явном Swagger__Enabled=true
+if (app.Environment.IsDevelopment() || app.Configuration.GetValue<bool>("Swagger:Enabled"))
+{
     app.UseSwagger();
     app.UseSwaggerUI();
-//}
+}
 
 app.UseAuthentication();
 app.UseAuthorization();
