@@ -30,7 +30,7 @@ Images are stored in the database (home-scale project, single Postgres volume) i
 
 ## Classifier
 Pure function `WardrobeClassifier.Classify(name, notes, colorHex)`:
-- Lower-cases text, normalises `ё`→`е`, tokenises, matches against a keyword table (Russian stems + English words). Each rule contributes category, warmth, seasons and styles.
+- Lower-cases text, normalises `ё`→`е`, tokenises, matches against a keyword table (Russian stems, English whole words incl. plurals and phrases). The head noun decides the category: first Russian noun (adjectives ignored), otherwise last English noun. Each rule contributes category, warmth, seasons and styles.
 - Colour: explicit colour words in the text win; otherwise the photo's dominant colour hex is mapped to the nearest dictionary colour (Euclidean distance in RGB with a neutral/greyscale check).
 - Returns suggestion + `confidence` (0..1) + `matchedKeywords`. Unknown text returns `category = null`, confidence 0 (client keeps user's choice).
 
@@ -38,6 +38,6 @@ Pure function `WardrobeClassifier.Classify(name, notes, colorHex)`:
 Pure `OutfitGenerator.Generate(items, request, now)`:
 1. Target warmth from temperature: ≥ 25 → 1, 18..24 → 2, 10..17 → 3, 0..9 → 4, < 0 → 5. Season from temperature if given, else from month.
 2. Filter by occasion (item styles contain occasion) and season (item seasons empty or contain season).
-3. Templates: `TOP + BOTTOM + SHOES` or `DRESS + SHOES`; `OUTERWEAR` required when temperature < 15, forbidden when > 22, optional otherwise; at most one `ACCESSORY` added if it improves the score.
+3. Templates: `TOP + BOTTOM + SHOES` or `DRESS + SHOES`; `OUTERWEAR` (warmth within ±1 of target) required when temperature < 15, forbidden when > 22, optional otherwise; base layers within ±2 of the target warmth (±1 in hot weather); at most one `ACCESSORY`, added only when it does not lower the score (+2 completeness bonus).
 4. Score (0..100): warmth fit, colour harmony (neutrals go with everything; ≤ 2 accent colour families; same-family monochrome bonus), freshness (not worn in the last 3 days, low wear count), favourites bonus, small deterministic jitter from `seed` for variety.
-5. Returns top `count` (1..10, default 3) outfits with distinct item sets and minimal item reuse, each with Russian `reasons`. When nothing can be built, returns an empty list plus `missing` hints (e.g. "Добавьте обувь для стиля «Офис»").
+5. Picks `count` (1..10, default 3) outfits greedily with a reuse penalty (distinct item sets, minimal item reuse) and returns them sorted by score, each with Russian `reasons`. When nothing can be built, returns an empty list plus `missing` hints (e.g. "Добавьте обувь для стиля «Офис»").
