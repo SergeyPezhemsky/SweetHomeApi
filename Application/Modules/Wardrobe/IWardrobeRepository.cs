@@ -17,7 +17,8 @@ public interface IWardrobeRepository
     Task DeleteItemAsync(WardrobeItem item);
 
     Task<WardrobeItemImage?> GetImageAsync(string itemId);
-    Task SetImageAsync(WardrobeItem item, byte[] data, string contentType);
+    /// <summary>Сохраняет фото. Возвращает false, если вещь успели удалить.</summary>
+    Task<bool> SetImageAsync(WardrobeItem item, byte[] data, string contentType);
     Task DeleteImageAsync(WardrobeItem item);
 
     Task<List<WardrobeOutfit>> GetOutfitsAsync(string userId);

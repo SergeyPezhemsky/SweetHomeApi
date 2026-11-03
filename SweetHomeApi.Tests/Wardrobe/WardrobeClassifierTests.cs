@@ -110,6 +110,18 @@ public class WardrobeClassifierTests
     [InlineData("Flip flops", WardrobeCategory.SHOES, null)]
     [InlineData("Майкл Корс сумка", WardrobeCategory.ACCESSORY, null)]
     [InlineData("Trench coat", WardrobeCategory.OUTERWEAR, null)]
+    [InlineData("Пуховичок", WardrobeCategory.OUTERWEAR, null)]
+    [InlineData("Пальтишко", WardrobeCategory.OUTERWEAR, null)]
+    [InlineData("Пиджачок", WardrobeCategory.OUTERWEAR, null)]
+    [InlineData("Рюкзачок", WardrobeCategory.ACCESSORY, null)]
+    [InlineData("Кроссовочки", WardrobeCategory.SHOES, null)]
+    [InlineData("Кедики", WardrobeCategory.SHOES, null)]
+    [InlineData("Кожанка", WardrobeCategory.OUTERWEAR, null)]
+    [InlineData("Гольф", WardrobeCategory.TOP, null)]
+    [InlineData("Платье бордо", WardrobeCategory.DRESS, "BURGUNDY")]
+    [InlineData("Кэмел пальто", WardrobeCategory.OUTERWEAR, "BEIGE")]
+    [InlineData("Charcoal trousers", WardrobeCategory.BOTTOM, "GRAY")]
+    [InlineData("Lavender blouse", WardrobeCategory.TOP, "PURPLE")]
     public void ClassifiesCommonItems(string name, WardrobeCategory category, string? color)
     {
         var result = WardrobeClassifier.Classify(name);
@@ -159,6 +171,72 @@ public class WardrobeClassifierTests
         Assert.Equal(5, WardrobeClassifier.Classify("Puffer jacket").Warmth);
         Assert.Equal(3, WardrobeClassifier.Classify("Trench coat").Warmth);
         Assert.Equal(3, WardrobeClassifier.Classify("Light grey hoodie").Warmth);
+    }
+
+    [Theory]
+    [InlineData("Джинсовая куртка")]
+    [InlineData("Кожаная куртка")]
+    [InlineData("Fleece jacket")]
+    [InlineData("Denim jacket")]
+    [InlineData("Жилетка флисовая")]
+    public void LightJackets_AreDemiSeasonNotWinter(string name)
+    {
+        var result = WardrobeClassifier.Classify(name);
+
+        Assert.Equal(WardrobeCategory.OUTERWEAR, result.Category);
+        Assert.True(result.Warmth <= 3, $"{name}: warmth {result.Warmth}");
+        Assert.DoesNotContain("WINTER", result.Seasons);
+    }
+
+    [Theory]
+    [InlineData("White sneakers", "подарок, к белой футболке", WardrobeCategory.SHOES)]
+    [InlineData("Linen shirt", "Ношу с брюками", WardrobeCategory.TOP)]
+    public void Name_WinsOverNotes(string name, string notes, WardrobeCategory expected)
+    {
+        Assert.Equal(expected, WardrobeClassifier.Classify(name, notes).Category);
+    }
+
+    [Fact]
+    public void ColorsInNotes_AreNotTaken()
+    {
+        Assert.Equal(["BLACK"], WardrobeClassifier.Classify("Чёрные брюки", "носить с белой рубашкой").Colors);
+    }
+
+    [Fact]
+    public void NotesAreUsedWhenNameIsUnknown()
+    {
+        Assert.Equal(WardrobeCategory.TOP, WardrobeClassifier.Classify("Подарок мамы", "тёплый свитер").Category);
+    }
+
+    [Fact]
+    public void NavyBlue_IsOneColor()
+    {
+        Assert.Equal(["NAVY"], WardrobeClassifier.Classify("Navy blue blazer").Colors);
+    }
+
+    [Fact]
+    public void SilkTie_IsAllSeason()
+    {
+        Assert.Empty(WardrobeClassifier.Classify("Шёлковый галстук").Seasons);
+    }
+
+    [Fact]
+    public void InsulatedTrousers_AreColdSeason()
+    {
+        Assert.DoesNotContain("SUMMER", WardrobeClassifier.Classify("Утеплённые брюки").Seasons);
+        Assert.NotEmpty(WardrobeClassifier.Classify("Утеплённые брюки").Seasons);
+    }
+
+    [Fact]
+    public void CargoPants_AreCasual()
+    {
+        Assert.Equal("CASUAL", WardrobeClassifier.Classify("Брюки карго").Styles[0]);
+    }
+
+    [Fact]
+    public void SweaterDress_IsWarm()
+    {
+        Assert.True(WardrobeClassifier.Classify("Платье-свитер").Warmth >= 3);
     }
 
     [Fact]
@@ -211,6 +289,14 @@ public class WardrobeClassifierTests
     [InlineData("#98FF98", "GREEN")]
     [InlineData("#E1AD01", "YELLOW")]
     [InlineData("#36454F", "GRAY")]
+    [InlineData("#C3B091", "BEIGE")]
+    [InlineData("#D8BFD8", "PURPLE")]
+    [InlineData("#D3D3D3", "GRAY")]
+    [InlineData("#C2B280", "BEIGE")]
+    [InlineData("#4B5320", "OLIVE")]
+    [InlineData("#614051", "PURPLE")]
+    [InlineData("#FDFD96", "YELLOW")]
+    [InlineData("#9CAF88", "GREEN")]
     public void NearestColor_MapsPhotoColors(string hex, string expected)
     {
         Assert.True(WardrobeClassifier.TryParseHex(hex, out var rgb));

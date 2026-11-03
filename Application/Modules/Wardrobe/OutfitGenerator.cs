@@ -38,11 +38,15 @@ public static class OutfitGenerator
     public const int OuterwearRequiredBelow = 15;
     public const int OuterwearForbiddenAbove = 22;
 
-    private const int CandidatesPerSlot = 12;
+    private const int CandidatesPerSlot = 10;
     private const int MaxCandidates = 50_000;
     private const int ReusePenalty = 8;
     private const int AccessoryBonus = 2;
     private const int MaxScoreGap = 20;
+    private const int AccessoryCandidates = 400;
+
+    /// <summary>Ниже этой температуры верхняя одежда должна быть самой тёплой (пуховик, шуба).</summary>
+    public const int SevereFrostBelow = -10;
 
     private enum OuterwearMode
     {
@@ -101,12 +105,13 @@ public static class OutfitGenerator
         var bottoms = Slot(WardrobeCategory.BOTTOM, BaseFits, baseWarmth);
         var dresses = Slot(WardrobeCategory.DRESS, BaseFits, baseWarmth);
         var shoes = Slot(WardrobeCategory.SHOES, x => Math.Abs(x.Warmth - targetWarmth) <= 2, targetWarmth);
+        var minOuterWarmth = MinOuterwearWarmth(temperature, targetWarmth);
         var outerwear = outerwearMode == OuterwearMode.Forbidden
             ? []
-            : Slot(WardrobeCategory.OUTERWEAR, x => x.Warmth >= targetWarmth - 1 && x.Warmth <= targetWarmth + 1, targetWarmth);
+            : Slot(WardrobeCategory.OUTERWEAR, x => x.Warmth >= minOuterWarmth && x.Warmth <= targetWarmth + 1, targetWarmth);
         var accessories = Slot(WardrobeCategory.ACCESSORY, x => Math.Abs(x.Warmth - targetWarmth) <= 2, targetWarmth);
 
-        FillMissing(result, request.Occasion, season, targetWarmth, outerwearMode, tops, bottoms, dresses, shoes, outerwear);
+        FillMissing(result, request.Occasion, season, targetWarmth, minOuterWarmth, outerwearMode, tops, bottoms, dresses, shoes, outerwear);
         if (result.Missing.Count > 0)
             return result;
 
@@ -124,25 +129,40 @@ public static class OutfitGenerator
         foreach (var dress in dresses)
             bases.Add([dress]);
 
-        var candidates = new List<Candidate>();
+        // Сначала оцениваем образы без аксессуаров, затем подбираем аксессуар только лучшим —
+        // так перебор не умножается на число аксессуаров.
+        var draft = new List<(List<WardrobeItem> Items, double Score)>();
         foreach (var baseItems in bases)
         foreach (var shoe in shoes)
         foreach (var outer in outerOptions)
         {
-            if (candidates.Count >= MaxCandidates)
+            if (draft.Count >= MaxCandidates)
                 break;
 
             var items = new List<WardrobeItem>(baseItems) { shoe };
             if (outer is not null)
                 items.Add(outer);
 
-            var score = OutfitScore(items, baseWarmth, targetWarmth, nowUtc, seed);
+            draft.Add((items, OutfitScore(items, baseWarmth, targetWarmth, nowUtc, seed)));
+        }
+
+        var candidates = new List<Candidate>();
+        foreach (var (items, baseScore) in draft
+                     .OrderByDescending(x => x.Score)
+                     .ThenBy(x => string.Join('|', x.Items.Select(i => i.Id)), StringComparer.Ordinal)
+                     .Take(AccessoryCandidates))
+        {
+            var score = baseScore;
+            var hasDress = items.Any(x => x.Category == WardrobeCategory.DRESS);
 
             // Аксессуар добавляем, только если он не снижает оценку образа; за законченность образа +2.
             WardrobeItem? bestAccessory = null;
             var bestWithAccessory = score;
             foreach (var accessory in accessories)
             {
+                if (hasDress && WardrobeClassifier.IsNeckwear(accessory.Name))
+                    continue;
+
                 var withAccessory = OutfitScore([..items, accessory], baseWarmth, targetWarmth, nowUtc, seed);
                 if (withAccessory >= bestWithAccessory)
                 {
@@ -168,7 +188,6 @@ public static class OutfitGenerator
         var ordered = candidates
             .OrderByDescending(x => x.Score)
             .ThenBy(x => x.Key, StringComparer.Ordinal)
-            .Take(2000)
             .ToList();
 
         // Ради разнообразия не опускаемся до заметно худших образов.
@@ -259,6 +278,15 @@ public static class OutfitGenerator
         return seasons;
     }
 
+    /// <summary>
+    /// Минимальная теплота верхней одежды: в сильный мороз — только «очень тёплая»,
+    /// иначе допускаем на ступень легче нужной.
+    /// </summary>
+    public static int MinOuterwearWarmth(int temperature, int targetWarmth)
+    {
+        return temperature < SevereFrostBelow ? 5 : Math.Max(1, targetWarmth - 1);
+    }
+
     public static WardrobeSeason ResolveSeason(int? temperature, DateTime nowUtc)
     {
         var month = nowUtc.Month;
@@ -294,6 +322,7 @@ public static class OutfitGenerator
         WardrobeStyle occasion,
         WardrobeSeason season,
         int targetWarmth,
+        int minOuterWarmth,
         OuterwearMode outerwearMode,
         List<WardrobeItem> tops,
         List<WardrobeItem> bottoms,
@@ -319,7 +348,7 @@ public static class OutfitGenerator
 
         if (outerwearMode == OuterwearMode.Required && outerwear.Count == 0)
         {
-            var from = WardrobeDictionaries.WarmthLevels.First(x => x.Level == Math.Max(1, targetWarmth - 1)).Name.ToLowerInvariant();
+            var from = WardrobeDictionaries.WarmthLevels.First(x => x.Level == minOuterWarmth).Name.ToLowerInvariant();
             var to = WardrobeDictionaries.WarmthLevels.First(x => x.Level == Math.Min(5, targetWarmth + 1)).Name.ToLowerInvariant();
             var range = from == to ? $"«{from}»" : $"от «{from}» до «{to}»";
             result.Missing.Add($"Добавьте верхнюю одежду {context} — по теплоте {range}");

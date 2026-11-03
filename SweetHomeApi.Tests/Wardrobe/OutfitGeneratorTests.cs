@@ -131,6 +131,68 @@ public class OutfitGeneratorTests
         Assert.Contains(result.Outfits.SelectMany(x => x.Items), x => x.Id == "sweater");
     }
 
+    [Theory]
+    [InlineData(-12)]
+    [InlineData(-25)]
+    public void SevereFrost_OnlyVeryWarmOuterwear(int temperature)
+    {
+        var wardrobe = CasualWardrobe();
+        wardrobe.Add(Item("denim-jacket", WardrobeCategory.OUTERWEAR, 3, "BLUE"));
+
+        var result = OutfitGenerator.Generate(wardrobe, new OutfitSuggestionRequest
+        {
+            Occasion = WardrobeStyle.CASUAL,
+            Temperature = temperature,
+            Count = 10
+        }, Now);
+
+        Assert.NotEmpty(result.Outfits);
+        Assert.All(result.Outfits, outfit =>
+            Assert.Equal(5, outfit.Items.Single(x => x.Category == WardrobeCategory.OUTERWEAR).Warmth));
+    }
+
+    [Fact]
+    public void Tie_IsNeverAddedToDress()
+    {
+        var wardrobe = new List<WardrobeItem>
+        {
+            Item("Платье летнее", WardrobeCategory.DRESS, 1, "WHITE", ["OFFICE"]),
+            Item("Лоферы", WardrobeCategory.SHOES, 2, "BLACK", ["OFFICE"]),
+            Item("Галстук шёлковый", WardrobeCategory.ACCESSORY, 1, "BLACK", ["OFFICE"])
+        };
+
+        var result = OutfitGenerator.Generate(wardrobe, new OutfitSuggestionRequest
+        {
+            Occasion = WardrobeStyle.OFFICE,
+            Temperature = 28
+        }, Now);
+
+        Assert.NotEmpty(result.Outfits);
+        Assert.DoesNotContain(result.Outfits.SelectMany(x => x.Items), x => x.Name.StartsWith("Галстук"));
+    }
+
+    [Fact]
+    public void LargeWardrobe_IsFastEnough()
+    {
+        var categories = Enum.GetValues<WardrobeCategory>();
+        var colors = new[] { "BLACK", "WHITE", "GRAY", "BLUE", "BEIGE", "RED", "GREEN" };
+        var wardrobe = Enumerable.Range(0, 300)
+            .Select(i => Item($"item-{i}", categories[i % categories.Length], 1 + i % 5, colors[i % colors.Length]))
+            .ToList();
+
+        var watch = System.Diagnostics.Stopwatch.StartNew();
+        var result = OutfitGenerator.Generate(wardrobe, new OutfitSuggestionRequest
+        {
+            Occasion = WardrobeStyle.CASUAL,
+            Temperature = -5,
+            Count = 10
+        }, Now);
+        watch.Stop();
+
+        Assert.NotEmpty(result.Outfits);
+        Assert.True(watch.ElapsedMilliseconds < 700, $"took {watch.ElapsedMilliseconds} ms");
+    }
+
     [Fact]
     public void Outfits_AreReturnedBestFirst()
     {

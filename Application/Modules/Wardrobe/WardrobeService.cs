@@ -102,8 +102,7 @@ public class WardrobeService(IWardrobeRepository repository, TimeProvider? timeP
         if (existing is null)
             return null;
 
-        await repository.SetImageAsync(existing, data, contentType);
-        return existing;
+        return await repository.SetImageAsync(existing, data, contentType) ? existing : null;
     }
 
     public async Task<WardrobeItem?> DeleteImageAsync(string userId, string itemId)

@@ -1,5 +1,6 @@
 using Application.Modules.Wardrobe;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 
 namespace Persistance.Repositories;
 
@@ -123,6 +124,10 @@ public class WardrobeRepository(SweetHomeDbContext context) : IWardrobeRepositor
         await using var transaction = await context.Database.BeginTransactionAsync();
         await LockUserOutfitsAsync(item.UserId);
 
+        // Параллельный запрос мог удалить вещь, пока мы ждали блокировку: тогда делать нечего.
+        if (!await context.WardrobeItems.AnyAsync(x => x.Id == item.Id))
+            return;
+
         var outfits = await context.WardrobeOutfits
             .Where(x => x.UserId == item.UserId && x.ItemIds.Contains(item.Id))
             .ToListAsync();
@@ -140,8 +145,8 @@ public class WardrobeRepository(SweetHomeDbContext context) : IWardrobeRepositor
             context.WardrobeItemImages.Remove(image);
 
         context.WardrobeItems.Remove(item);
-        await context.SaveChangesAsync();
-        await transaction.CommitAsync();
+        if (await SaveIgnoringMissingRowsAsync())
+            await transaction.CommitAsync();
     }
 
     public Task<WardrobeItemImage?> GetImageAsync(string itemId)
@@ -151,23 +156,31 @@ public class WardrobeRepository(SweetHomeDbContext context) : IWardrobeRepositor
             .FirstOrDefaultAsync(x => x.ItemId == itemId);
     }
 
-    public async Task SetImageAsync(WardrobeItem item, byte[] data, string contentType)
+    public async Task<bool> SetImageAsync(WardrobeItem item, byte[] data, string contentType)
     {
         var now = DateTime.UtcNow;
 
         // Upsert одной командой: две одновременные первые загрузки не падают на первичном ключе.
-        await context.Database.ExecuteSqlInterpolatedAsync($"""
+        try
+        {
+            await context.Database.ExecuteSqlInterpolatedAsync($"""
             INSERT INTO "WardrobeItemImages" ("ItemId", "Data", "ContentType", "UpdatedAt")
             VALUES ({item.Id}, {data}, {contentType}, {now})
             ON CONFLICT ("ItemId") DO UPDATE
             SET "Data" = EXCLUDED."Data", "ContentType" = EXCLUDED."ContentType", "UpdatedAt" = EXCLUDED."UpdatedAt"
             """);
+        }
+        catch (PostgresException ex) when (ex.SqlState == PostgresErrorCodes.ForeignKeyViolation)
+        {
+            // Вещь удалили параллельно — фото прикреплять не к чему.
+            return false;
+        }
 
         item.HasImage = true;
         item.ImageUpdatedAt = now;
         item.UpdatedAt = now;
 
-        await context.SaveChangesAsync();
+        return await SaveIgnoringMissingRowsAsync();
     }
 
     public async Task DeleteImageAsync(WardrobeItem item)
@@ -180,7 +193,7 @@ public class WardrobeRepository(SweetHomeDbContext context) : IWardrobeRepositor
         item.ImageUpdatedAt = null;
         item.UpdatedAt = DateTime.UtcNow;
 
-        await context.SaveChangesAsync();
+        await SaveIgnoringMissingRowsAsync();
     }
 
     public Task<List<WardrobeOutfit>> GetOutfitsAsync(string userId)
@@ -228,7 +241,7 @@ public class WardrobeRepository(SweetHomeDbContext context) : IWardrobeRepositor
     public async Task DeleteOutfitAsync(WardrobeOutfit outfit)
     {
         context.WardrobeOutfits.Remove(outfit);
-        await context.SaveChangesAsync();
+        await SaveIgnoringMissingRowsAsync();
     }
 
     public Task MarkItemsWornAsync(string userId, IReadOnlyCollection<string> itemIds, DateTime wornAt)
@@ -249,6 +262,24 @@ public class WardrobeRepository(SweetHomeDbContext context) : IWardrobeRepositor
                 .SetProperty(x => x.WearCount, x => x.WearCount + 1)
                 .SetProperty(x => x.LastWornAt, wornAt)
                 .SetProperty(x => x.UpdatedAt, wornAt));
+    }
+
+    /// <summary>
+    /// Сохраняет изменения; если строку уже удалил параллельный запрос (двойной тап «Удалить»),
+    /// это не ошибка: результат тот же — записи нет.
+    /// </summary>
+    private async Task<bool> SaveIgnoringMissingRowsAsync()
+    {
+        try
+        {
+            await context.SaveChangesAsync();
+            return true;
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            context.ChangeTracker.Clear();
+            return false;
+        }
     }
 
     private static string EscapeLike(string value)

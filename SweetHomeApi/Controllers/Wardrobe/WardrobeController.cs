@@ -14,6 +14,7 @@ namespace SweetHomeApi.Controllers.Wardrobe;
 [ApiController]
 [Authorize]
 [Route("api/v1/wardrobe")]
+[WardrobeModelStateErrors]
 public class WardrobeController(IWardrobeService wardrobeService, UserManager<IdentityUser> userManager) : ControllerBase
 {
     public const int MaxImageBytes = 5 * 1024 * 1024;
@@ -70,7 +71,7 @@ public class WardrobeController(IWardrobeService wardrobeService, UserManager<Id
 
         var result = await wardrobeService.GetItemsAsync(userId, new WardrobeItemQuery
         {
-            Query = query,
+            Query = StripControlChars(query),
             Category = parsedCategory,
             Season = NormalizeCode(season),
             Style = NormalizeCode(style),
@@ -245,7 +246,7 @@ public class WardrobeController(IWardrobeService wardrobeService, UserManager<Id
         if (details.Count > 0)
             return BadRequest(ValidationError(details));
 
-        var result = wardrobeService.Classify(dto.Name, dto.Notes, dto.ColorHex);
+        var result = wardrobeService.Classify(StripControlChars(dto.Name), StripControlChars(dto.Notes), dto.ColorHex);
         return Ok(new WardrobeClassificationDto
         {
             Category = result.Category,
@@ -323,6 +324,10 @@ public class WardrobeController(IWardrobeService wardrobeService, UserManager<Id
             details.Add(new ErrorDetailDto { Field = "name", Message = "Название обязательно" });
         else if (dto.Name.Trim().Length > 80)
             details.Add(new ErrorDetailDto { Field = "name", Message = "Название должно быть не длиннее 80 символов" });
+        else if (HasControlChars(dto.Name))
+            details.Add(new ErrorDetailDto { Field = "name", Message = "Название содержит недопустимые символы" });
+        if (HasControlChars(dto.Note, allowLineBreaks: true))
+            details.Add(new ErrorDetailDto { Field = "note", Message = "Заметка содержит недопустимые символы" });
 
         var itemIds = (dto.ItemIds ?? []).Where(x => !string.IsNullOrWhiteSpace(x)).Distinct().ToList();
         if (itemIds.Count is < 2 or > 8)
@@ -409,6 +414,17 @@ public class WardrobeController(IWardrobeService wardrobeService, UserManager<Id
         return Enum.TryParse<T>(value.Trim(), true, out var parsed) && Enum.IsDefined(parsed) ? parsed : null;
     }
 
+    /// <summary>Управляющие символы (в т.ч. NUL, который PostgreSQL не хранит в text) не принимаем.</summary>
+    private static bool HasControlChars(string? value, bool allowLineBreaks = false)
+    {
+        return value is not null && value.Any(c => char.IsControl(c) && !(allowLineBreaks && c is '\n' or '\r' or '\t'));
+    }
+
+    private static string? StripControlChars(string? value)
+    {
+        return value is null ? null : new string(value.Where(c => !char.IsControl(c)).ToArray());
+    }
+
     private static string? NormalizeCode(string? value)
     {
         return string.IsNullOrWhiteSpace(value) ? null : value.Trim().ToUpperInvariant();
@@ -422,6 +438,13 @@ public class WardrobeController(IWardrobeService wardrobeService, UserManager<Id
             details.Add(new ErrorDetailDto { Field = "name", Message = "Название обязательно" });
         else if (dto.Name.Trim().Length > 120)
             details.Add(new ErrorDetailDto { Field = "name", Message = "Название должно быть не длиннее 120 символов" });
+        else if (HasControlChars(dto.Name))
+            details.Add(new ErrorDetailDto { Field = "name", Message = "Название содержит недопустимые символы" });
+
+        if (HasControlChars(dto.Brand))
+            details.Add(new ErrorDetailDto { Field = "brand", Message = "Бренд содержит недопустимые символы" });
+        if (HasControlChars(dto.Notes, allowLineBreaks: true))
+            details.Add(new ErrorDetailDto { Field = "notes", Message = "Заметка содержит недопустимые символы" });
 
         if (ParseEnum<WardrobeCategory>(dto.Category) is null)
             details.Add(new ErrorDetailDto { Field = "category", Message = "Выберите категорию" });
@@ -569,5 +592,52 @@ public sealed class DisableFormValueModelBindingAttribute : Attribute, IResource
 
     public void OnResourceExecuted(ResourceExecutedContext context)
     {
+    }
+}
+
+/// <summary>
+/// Ошибки разбора запроса (неверный JSON, тип поля, значение query-параметра) отдаём
+/// в общем формате <see cref="ErrorResponseDto"/> вместо стандартного ProblemDetails.
+/// </summary>
+[AttributeUsage(AttributeTargets.Class)]
+public sealed class WardrobeModelStateErrorsAttribute : ActionFilterAttribute
+{
+    public WardrobeModelStateErrorsAttribute()
+    {
+        // Раньше встроенного ModelStateInvalidFilter (Order = -2000).
+        Order = -3000;
+    }
+
+    public override void OnActionExecuting(ActionExecutingContext context)
+    {
+        if (context.ModelState.IsValid)
+            return;
+
+        var details = context.ModelState
+            .Where(x => x.Value?.Errors.Count > 0)
+            .Select(x => new ErrorDetailDto
+            {
+                Field = ToCamelCase(x.Key.TrimStart('$', '.').Split('.').LastOrDefault() ?? string.Empty),
+                Message = "Некорректное значение"
+            })
+            .DistinctBy(x => x.Field)
+            .ToList();
+
+        // Ошибка «не удалось собрать dto» дублирует ошибку конкретного поля — оставляем только поле.
+        if (details.Count > 1)
+            details = details.Where(x => x.Field is not ("dto" or "body")).ToList();
+
+        context.Result = new BadRequestObjectResult(new ErrorResponseDto
+        {
+            ErrorCode = "VALIDATION_ERROR",
+            Message = "Ошибка валидации",
+            Details = details,
+            TraceId = context.HttpContext.TraceIdentifier
+        });
+    }
+
+    private static string ToCamelCase(string value)
+    {
+        return string.IsNullOrEmpty(value) ? "body" : char.ToLowerInvariant(value[0]) + value[1..];
     }
 }
