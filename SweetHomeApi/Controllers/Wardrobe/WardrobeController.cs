@@ -629,8 +629,8 @@ public sealed class WardrobeModelStateErrorsAttribute : ActionFilterAttribute
         // Ошибка «не удалось собрать dto» дублирует ошибку конкретного поля — оставляем только поле.
         if (details.Count > 1)
             details = details.Where(x => x.Field is not ("dto" or "body")).ToList();
-        if (details.Count == 1 && details[0].Field == "dto")
-            details[0] = new ErrorDetailDto { Field = "body", Message = "Тело запроса пустое или не является корректным JSON" };
+        if (details.Count == 0 || (details.Count == 1 && details[0].Field is "dto" or "body"))
+            details = [new ErrorDetailDto { Field = "body", Message = "Тело запроса пустое или не является корректным JSON" }];
 
         context.Result = new BadRequestObjectResult(new ErrorResponseDto
         {

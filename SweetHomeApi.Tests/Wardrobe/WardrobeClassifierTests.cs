@@ -282,6 +282,59 @@ public class WardrobeClassifierTests
         Assert.True(WardrobeClassifier.Classify("Платье-свитер").Warmth >= 3);
     }
 
+    [Theory]
+    [InlineData("Зимние кожаные ботинки")]
+    [InlineData("Сапоги зимние женские кожаные")]
+    [InlineData("Зимние замшевые сапоги на меху")]
+    [InlineData("Кожаная дублёнка")]
+    public void LeatherWinterItems_StayWinter(string name)
+    {
+        var result = WardrobeClassifier.Classify(name);
+
+        Assert.True(result.Warmth >= 4, $"{name}: {result.Warmth}");
+        Assert.Contains("WINTER", result.Seasons);
+    }
+
+    [Theory]
+    [InlineData("Спортивные брюки", "OFFICE")]
+    [InlineData("Спортивная кофта", "OFFICE")]
+    [InlineData("Вечернее платье", "CASUAL")]
+    [InlineData("Вечернее платье", "OFFICE")]
+    [InlineData("Резиновые сапоги", "OFFICE")]
+    public void ExplicitStyle_ReplacesCategoryStyles(string name, string forbidden)
+    {
+        Assert.DoesNotContain(forbidden, WardrobeClassifier.Classify(name).Styles);
+    }
+
+    [Theory]
+    [InlineData("Шерстяное пальто", 4)]
+    [InlineData("Кашемировое пальто", 4)]
+    [InlineData("Пиджак шерстяной", 2)]
+    public void WoolOuterwear_IsNotFrostProof(string name, int warmth)
+    {
+        Assert.Equal(warmth, WardrobeClassifier.Classify(name).Warmth);
+    }
+
+    [Theory]
+    [InlineData("Oxford shoes", WardrobeCategory.SHOES, "FORMAL")]
+    [InlineData("Leather shoes", WardrobeCategory.SHOES, "OFFICE")]
+    [InlineData("Polo shirt", WardrobeCategory.TOP, "CASUAL")]
+    public void EnglishPhrases(string name, WardrobeCategory category, string style)
+    {
+        var result = WardrobeClassifier.Classify(name);
+        Assert.Equal(category, result.Category);
+        Assert.Contains(style, result.Styles);
+    }
+
+    [Fact]
+    public void WinterHatsAndSnowBoots_AreWarm()
+    {
+        Assert.True(WardrobeClassifier.Classify("Winter hat").Warmth >= 4);
+        Assert.True(WardrobeClassifier.Classify("Knit hat").Warmth >= 4);
+        Assert.Equal(["WINTER"], WardrobeClassifier.Classify("Snow boots").Seasons);
+        Assert.True(WardrobeClassifier.Classify("Track jacket").Warmth <= 3);
+    }
+
     [Fact]
     public void DarkBlue_IsNotAlsoBlue()
     {
@@ -344,6 +397,8 @@ public class WardrobeClassifierTests
     [InlineData("#3E2723", "BROWN")]
     [InlineData("#C8A2C8", "PURPLE")]
     [InlineData("#E3D9C6", "BEIGE")]
+    [InlineData("#000080", "NAVY")]
+    [InlineData("#A67B5B", "BROWN")]
     public void NearestColor_MapsPhotoColors(string hex, string expected)
     {
         Assert.True(WardrobeClassifier.TryParseHex(hex, out var rgb));

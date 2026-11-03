@@ -61,7 +61,7 @@ Every endpoint under `api/v1/wardrobe` SHALL require an authenticated session an
 
 #### Scenario: Occasion filter
 - WHEN occasion is `OFFICE`
-- THEN every item in every outfit has style `OFFICE`.
+- THEN every top, bottom and dress in every outfit has style `OFFICE`; street items (outerwear, shoes, warm accessories) also have style `OFFICE`, or `CASUAL` when the wardrobe has no suitable `OFFICE` street item (e.g. winter boots).
 
 #### Scenario: Valid structure
 - THEN each outfit is either `TOP + BOTTOM + SHOES` or `DRESS + SHOES`, plus optional outerwear and accessories (at most one per body place, up to three in cold weather), and outfits have distinct item sets.

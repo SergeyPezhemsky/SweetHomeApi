@@ -126,7 +126,9 @@ public static class OutfitGenerator
         var bottomTolerance = desired <= 2.5 ? 1.2 : 2.0;
         bool BaseFits(WardrobeItem x) => Math.Abs(x.Warmth - baseDesired) <= baseTolerance;
         bool BottomFits(WardrobeItem x) => Math.Abs(x.Warmth - baseDesired) <= bottomTolerance;
-        bool ShoesFit(WardrobeItem x) => Math.Abs(x.Warmth - desired) <= (indoor ? 1.5 : 2.0);
+        // В сильный мороз — только тёплая обувь (не туфли и не кроссовки).
+        bool ShoesFit(WardrobeItem x) => Math.Abs(x.Warmth - desired) <= (indoor ? 1.5 : 2.0)
+                                         && (indoor || temperature >= SevereFrostBelow || x.Warmth >= 4);
 
         var tops = Best(suitable.Where(x => x.Category == WardrobeCategory.TOP && BaseFits(x)), baseDesired);
         var bottoms = Best(suitable.Where(x => x.Category == WardrobeCategory.BOTTOM && BottomFits(x)), baseDesired);

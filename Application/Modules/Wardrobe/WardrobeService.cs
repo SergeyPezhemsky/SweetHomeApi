@@ -4,7 +4,15 @@ public class WardrobeService(IWardrobeRepository repository, TimeProvider? timeP
 {
     private readonly TimeProvider _time = timeProvider ?? TimeProvider.System;
 
-    private DateTime UtcNow => _time.GetUtcNow().UtcDateTime;
+    /// <summary>Текущее время с точностью PostgreSQL (микросекунды): ответы POST/PUT совпадают с последующими GET.</summary>
+    private DateTime UtcNow
+    {
+        get
+        {
+            var now = _time.GetUtcNow().UtcDateTime;
+            return new DateTime(now.Ticks - now.Ticks % 10, DateTimeKind.Utc);
+        }
+    }
 
     public async Task<WardrobeItemListResult> GetItemsAsync(string userId, WardrobeItemQuery query)
     {

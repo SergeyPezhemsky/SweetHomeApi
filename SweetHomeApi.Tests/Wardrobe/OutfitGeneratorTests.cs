@@ -152,6 +152,23 @@ public class OutfitGeneratorTests
     }
 
     [Fact]
+    public void SevereFrost_OnlyWarmShoes()
+    {
+        var wardrobe = CasualWardrobe();
+        wardrobe.Add(Item("loafers", WardrobeCategory.SHOES, 2, "BLACK"));
+
+        var result = OutfitGenerator.Generate(wardrobe, new OutfitSuggestionRequest
+        {
+            Occasion = WardrobeStyle.CASUAL,
+            Temperature = -20,
+            Count = 10
+        }, Now);
+
+        Assert.All(result.Outfits, outfit =>
+            Assert.True(outfit.Items.Single(x => x.Category == WardrobeCategory.SHOES).Warmth >= 4));
+    }
+
+    [Fact]
     public void Tie_IsNeverAddedToDress()
     {
         var wardrobe = new List<WardrobeItem>

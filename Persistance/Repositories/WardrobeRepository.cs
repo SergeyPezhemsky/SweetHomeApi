@@ -123,32 +123,28 @@ public class WardrobeRepository(SweetHomeDbContext context) : IWardrobeRepositor
 
     public async Task DeleteItemAsync(WardrobeItem item)
     {
+        var now = DateTime.UtcNow;
         await using var transaction = await context.Database.BeginTransactionAsync();
+
+        // Порядок блокировок: образы пользователя → фото вещи (загрузка фото берёт только вторую),
+        // поэтому взаимной блокировки с параллельной загрузкой фото нет.
         await LockUserOutfitsAsync(item.UserId);
+        await LockItemImageAsync(item.Id);
 
-        // Параллельный запрос мог удалить вещь, пока мы ждали блокировку: тогда делать нечего.
-        if (!await context.WardrobeItems.AnyAsync(x => x.Id == item.Id))
-            return;
+        // Всё — прямыми SQL-командами: нет отслеживаемых сущностей, которые мог бы «устареть» параллельный запрос.
+        await context.Database.ExecuteSqlInterpolatedAsync($"""
+            UPDATE "WardrobeOutfits"
+            SET "ItemIds" = array_remove("ItemIds", {item.Id}), "UpdatedAt" = {now}
+            WHERE "UserId" = {item.UserId} AND {item.Id} = ANY("ItemIds")
+            """);
+        await context.WardrobeOutfits
+            .Where(x => x.UserId == item.UserId && x.ItemIds.Count < 2)
+            .ExecuteDeleteAsync();
+        await context.WardrobeItemImages.Where(x => x.ItemId == item.Id).ExecuteDeleteAsync();
+        await context.WardrobeItems.Where(x => x.Id == item.Id && x.UserId == item.UserId).ExecuteDeleteAsync();
 
-        var outfits = await context.WardrobeOutfits
-            .Where(x => x.UserId == item.UserId && x.ItemIds.Contains(item.Id))
-            .ToListAsync();
-
-        foreach (var outfit in outfits)
-        {
-            outfit.ItemIds = outfit.ItemIds.Where(x => x != item.Id).ToList();
-            outfit.UpdatedAt = DateTime.UtcNow;
-            if (outfit.ItemIds.Count < 2)
-                context.WardrobeOutfits.Remove(outfit);
-        }
-
-        var image = await context.WardrobeItemImages.FirstOrDefaultAsync(x => x.ItemId == item.Id);
-        if (image is not null)
-            context.WardrobeItemImages.Remove(image);
-
-        context.WardrobeItems.Remove(item);
-        if (await SaveIgnoringMissingRowsAsync())
-            await transaction.CommitAsync();
+        await transaction.CommitAsync();
+        context.Entry(item).State = EntityState.Detached;
     }
 
     public Task<WardrobeItemImage?> GetImageAsync(string itemId)
@@ -273,8 +269,10 @@ public class WardrobeRepository(SweetHomeDbContext context) : IWardrobeRepositor
 
     public async Task DeleteOutfitAsync(WardrobeOutfit outfit)
     {
-        context.WardrobeOutfits.Remove(outfit);
-        await SaveIgnoringMissingRowsAsync();
+        await context.WardrobeOutfits
+            .Where(x => x.Id == outfit.Id && x.UserId == outfit.UserId)
+            .ExecuteDeleteAsync();
+        context.Entry(outfit).State = EntityState.Detached;
     }
 
     public Task MarkItemsWornAsync(string userId, IReadOnlyCollection<string> itemIds, DateTime wornAt)
