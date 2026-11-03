@@ -22,7 +22,8 @@ public interface IWardrobeRepository
 
     Task<List<WardrobeOutfit>> GetOutfitsAsync(string userId);
     Task<WardrobeOutfit?> GetOutfitAsync(string userId, string outfitId);
-    Task AddOutfitAsync(WardrobeOutfit outfit);
+    /// <summary>Добавляет образ, если все его вещи всё ещё существуют. Возвращает false, если какой-то вещи уже нет.</summary>
+    Task<bool> AddOutfitAsync(WardrobeOutfit outfit);
     Task DeleteOutfitAsync(WardrobeOutfit outfit);
 
     /// <summary>Атомарно увеличивает счётчик ношения вещей (без потерянных обновлений при параллельных запросах).</summary>

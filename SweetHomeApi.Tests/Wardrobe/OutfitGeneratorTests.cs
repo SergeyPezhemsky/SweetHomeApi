@@ -92,6 +92,46 @@ public class OutfitGeneratorTests
     }
 
     [Fact]
+    public void WarmNovemberDay_AllowsSummerTops()
+    {
+        var wardrobe = new List<WardrobeItem>
+        {
+            Item("tee", WardrobeCategory.TOP, 1, "WHITE", seasons: ["SPRING", "SUMMER"]),
+            Item("jeans", WardrobeCategory.BOTTOM, 2, "BLUE"),
+            Item("sneakers", WardrobeCategory.SHOES, 2, "WHITE")
+        };
+
+        var result = OutfitGenerator.Generate(wardrobe, new OutfitSuggestionRequest
+        {
+            Occasion = WardrobeStyle.CASUAL,
+            Temperature = 19
+        }, Now);
+
+        Assert.NotEmpty(result.Outfits);
+    }
+
+    [Fact]
+    public void ColdMarchDay_AllowsWinterSweater()
+    {
+        var march = new DateTime(2026, 3, 10, 9, 0, 0, DateTimeKind.Utc);
+        var wardrobe = new List<WardrobeItem>
+        {
+            Item("sweater", WardrobeCategory.TOP, 4, "GRAY", seasons: ["AUTUMN", "WINTER"]),
+            Item("jeans", WardrobeCategory.BOTTOM, 2, "BLUE"),
+            Item("boots", WardrobeCategory.SHOES, 4, "BLACK"),
+            Item("coat", WardrobeCategory.OUTERWEAR, 4, "BEIGE")
+        };
+
+        var result = OutfitGenerator.Generate(wardrobe, new OutfitSuggestionRequest
+        {
+            Occasion = WardrobeStyle.CASUAL,
+            Temperature = 1
+        }, march);
+
+        Assert.Contains(result.Outfits.SelectMany(x => x.Items), x => x.Id == "sweater");
+    }
+
+    [Fact]
     public void Outfits_AreReturnedBestFirst()
     {
         var result = OutfitGenerator.Generate(CasualWardrobe(), new OutfitSuggestionRequest

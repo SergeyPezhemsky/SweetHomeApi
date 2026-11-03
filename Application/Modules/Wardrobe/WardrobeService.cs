@@ -163,7 +163,8 @@ public class WardrobeService(IWardrobeRepository repository, TimeProvider? timeP
         outfit.CreatedAt = now;
         outfit.UpdatedAt = now;
 
-        await repository.AddOutfitAsync(outfit);
+        if (!await repository.AddOutfitAsync(outfit))
+            return WardrobeOperationResult<WardrobeOutfitDetails>.InvalidItems();
 
         var byId = items.ToDictionary(x => x.Id);
         return WardrobeOperationResult<WardrobeOutfitDetails>.Ok(new WardrobeOutfitDetails

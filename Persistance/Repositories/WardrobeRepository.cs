@@ -121,6 +121,7 @@ public class WardrobeRepository(SweetHomeDbContext context) : IWardrobeRepositor
     public async Task DeleteItemAsync(WardrobeItem item)
     {
         await using var transaction = await context.Database.BeginTransactionAsync();
+        await LockUserOutfitsAsync(item.UserId);
 
         var outfits = await context.WardrobeOutfits
             .Where(x => x.UserId == item.UserId && x.ItemIds.Contains(item.Id))
@@ -153,16 +154,14 @@ public class WardrobeRepository(SweetHomeDbContext context) : IWardrobeRepositor
     public async Task SetImageAsync(WardrobeItem item, byte[] data, string contentType)
     {
         var now = DateTime.UtcNow;
-        var image = await context.WardrobeItemImages.FirstOrDefaultAsync(x => x.ItemId == item.Id);
-        if (image is null)
-        {
-            image = new WardrobeItemImage { ItemId = item.Id };
-            context.WardrobeItemImages.Add(image);
-        }
 
-        image.Data = data;
-        image.ContentType = contentType;
-        image.UpdatedAt = now;
+        // Upsert одной командой: две одновременные первые загрузки не падают на первичном ключе.
+        await context.Database.ExecuteSqlInterpolatedAsync($"""
+            INSERT INTO "WardrobeItemImages" ("ItemId", "Data", "ContentType", "UpdatedAt")
+            VALUES ({item.Id}, {data}, {contentType}, {now})
+            ON CONFLICT ("ItemId") DO UPDATE
+            SET "Data" = EXCLUDED."Data", "ContentType" = EXCLUDED."ContentType", "UpdatedAt" = EXCLUDED."UpdatedAt"
+            """);
 
         item.HasImage = true;
         item.ImageUpdatedAt = now;
@@ -200,10 +199,30 @@ public class WardrobeRepository(SweetHomeDbContext context) : IWardrobeRepositor
             .FirstOrDefaultAsync(x => x.UserId == userId && x.Id == outfitId);
     }
 
-    public async Task AddOutfitAsync(WardrobeOutfit outfit)
+    public async Task<bool> AddOutfitAsync(WardrobeOutfit outfit)
     {
+        await using var transaction = await context.Database.BeginTransactionAsync();
+        await LockUserOutfitsAsync(outfit.UserId);
+
+        // Повторная проверка под блокировкой: вещь могли удалить между проверкой в сервисе и вставкой.
+        var ids = outfit.ItemIds.ToList();
+        var existing = await context.WardrobeItems.CountAsync(x => x.UserId == outfit.UserId && ids.Contains(x.Id));
+        if (existing != ids.Count)
+            return false;
+
         context.WardrobeOutfits.Add(outfit);
         await context.SaveChangesAsync();
+        await transaction.CommitAsync();
+        return true;
+    }
+
+    /// <summary>
+    /// Сериализует изменения образов пользователя (удаление вещей и создание образов),
+    /// чтобы параллельные запросы не теряли обновления массива ItemIds.
+    /// </summary>
+    private Task LockUserOutfitsAsync(string userId)
+    {
+        return context.Database.ExecuteSqlInterpolatedAsync($"SELECT pg_advisory_xact_lock(hashtext({"wardrobe-outfits:" + userId}))");
     }
 
     public async Task DeleteOutfitAsync(WardrobeOutfit outfit)

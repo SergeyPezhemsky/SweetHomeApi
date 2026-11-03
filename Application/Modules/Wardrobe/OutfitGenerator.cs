@@ -42,6 +42,7 @@ public static class OutfitGenerator
     private const int MaxCandidates = 50_000;
     private const int ReusePenalty = 8;
     private const int AccessoryBonus = 2;
+    private const int MaxScoreGap = 20;
 
     private enum OuterwearMode
     {
@@ -78,10 +79,10 @@ public static class OutfitGenerator
         };
 
         var occasion = request.Occasion.ToString();
-        var seasonCode = season.ToString();
+        var allowedSeasons = AllowedSeasons(request.Temperature, temperature, season);
         var suitable = wardrobe
             .Where(x => x.Styles.Contains(occasion))
-            .Where(x => x.Seasons.Count == 0 || x.Seasons.Contains(seasonCode))
+            .Where(x => x.Seasons.Count == 0 || x.Seasons.Any(allowedSeasons.Contains))
             .ToList();
 
         var baseWarmth = Math.Min(targetWarmth, 4);
@@ -170,6 +171,13 @@ public static class OutfitGenerator
             .Take(2000)
             .ToList();
 
+        // Ради разнообразия не опускаемся до заметно худших образов.
+        if (ordered.Count > 0)
+        {
+            var floor = ordered[0].Score - MaxScoreGap;
+            ordered = ordered.Where(x => x.Score >= floor).ToList();
+        }
+
         var used = new Dictionary<string, int>();
         var pickedKeys = new HashSet<string>();
         for (var i = 0; i < count; i++)
@@ -218,6 +226,38 @@ public static class OutfitGenerator
         >= 0 => 4,
         _ => 5
     };
+
+    /// <summary>
+    /// Сезоны, вещи которых уместны при такой погоде. Решает температура, а не календарь:
+    /// при +19 °C в ноябре подходят и летние футболки, при +1 °C в марте — и зимний свитер.
+    /// </summary>
+    public static HashSet<string> AllowedSeasons(int? requestedTemperature, int temperature, WardrobeSeason season)
+    {
+        if (requestedTemperature is null)
+        {
+            var byMonth = new HashSet<string> { season.ToString() };
+            if (season is WardrobeSeason.SPRING or WardrobeSeason.AUTUMN)
+            {
+                byMonth.Add(nameof(WardrobeSeason.SPRING));
+                byMonth.Add(nameof(WardrobeSeason.AUTUMN));
+            }
+
+            return byMonth;
+        }
+
+        var seasons = new HashSet<string>();
+        if (temperature >= 15)
+            seasons.Add(nameof(WardrobeSeason.SUMMER));
+        if (temperature is > 0 and < 22)
+        {
+            seasons.Add(nameof(WardrobeSeason.SPRING));
+            seasons.Add(nameof(WardrobeSeason.AUTUMN));
+        }
+        if (temperature <= 5)
+            seasons.Add(nameof(WardrobeSeason.WINTER));
+
+        return seasons;
+    }
 
     public static WardrobeSeason ResolveSeason(int? temperature, DateTime nowUtc)
     {
@@ -322,9 +362,11 @@ public static class OutfitGenerator
     public static double ColorHarmony(IReadOnlyCollection<WardrobeItem> items)
     {
         var colors = items.SelectMany(x => x.Colors.Take(2)).ToList();
+        // Оттенки одного цвета (синий и голубой, красный и бордовый) считаем одним акцентом.
         var accents = colors
             .Where(x => WardrobeDictionaries.FindColor(x) is { Neutral: false })
             .Where(x => x != "MULTI")
+            .Select(ColorFamily)
             .Distinct()
             .ToList();
         var multiCount = items.Count(x => x.Colors.Contains("MULTI"));
@@ -359,24 +401,30 @@ public static class OutfitGenerator
         ("PINK", "ORANGE"),
         ("RED", "GREEN"),
         ("PURPLE", "ORANGE"),
-        ("BURGUNDY", "RED"),
         ("YELLOW", "PURPLE"),
         ("GREEN", "PINK")
     ];
 
+    private static string ColorFamily(string code) => code switch
+    {
+        "LIGHT_BLUE" => "BLUE",
+        "BURGUNDY" => "RED",
+        "OLIVE" => "GREEN",
+        _ => code
+    };
+
     /// <summary>0 — надевали в последние 3 дня, 1 — давно не надевали или не надевали никогда.</summary>
     private static double Freshness(WardrobeItem item, DateTime nowUtc)
     {
+        // Небольшая поправка за то, как часто вещь вообще носят: редко надеваемые всплывают чаще.
+        var rarity = 1 - Math.Min(item.WearCount, 30) / 30.0;
         if (item.LastWornAt is null)
-            return 1;
+            return 0.85 + 0.15 * rarity;
 
-        var days = (nowUtc - item.LastWornAt.Value).TotalDays;
-        if (days < 3)
-            return 0;
-        if (days >= 14)
-            return 1;
-
-        return (days - 3) / 11;
+        // Целые дни: результат не меняется от часа к часу при одинаковом запросе.
+        var days = Math.Floor((nowUtc - item.LastWornAt.Value).TotalDays);
+        double recency = days < 3 ? 0 : days >= 14 ? 1 : (days - 3) / 11;
+        return 0.85 * recency + 0.15 * rarity;
     }
 
     /// <summary>Стабильный «шум» −1..+1 от id вещи и seed: разнообразит выдачу, но повторяем.</summary>
