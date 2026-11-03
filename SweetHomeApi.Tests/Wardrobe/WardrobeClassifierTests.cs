@@ -131,6 +131,11 @@ public class WardrobeClassifierTests
     [InlineData("Платье в цветочек", WardrobeCategory.DRESS, "MULTI")]
     [InlineData("Khaki chinos", WardrobeCategory.BOTTOM, "BEIGE")]
     [InlineData("Худи Off-White", WardrobeCategory.TOP, null)]
+    [InlineData("Свитер-платье", WardrobeCategory.DRESS, null)]
+    [InlineData("Полушубок", WardrobeCategory.OUTERWEAR, null)]
+    [InlineData("Бермуды", WardrobeCategory.BOTTOM, null)]
+    [InlineData("Дождевик", WardrobeCategory.OUTERWEAR, null)]
+    [InlineData("Сникерсы", WardrobeCategory.SHOES, null)]
     public void ClassifiesCommonItems(string name, WardrobeCategory category, string? color)
     {
         var result = WardrobeClassifier.Classify(name);

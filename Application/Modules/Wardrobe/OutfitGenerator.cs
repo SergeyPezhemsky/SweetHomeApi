@@ -68,7 +68,7 @@ public static class OutfitGenerator
         var seed = request.Seed ?? 0;
         var temperatureAssumed = request.Temperature is null;
         var season = ResolveSeason(request.Temperature, nowUtc);
-        var temperature = request.Temperature ?? TypicalTemperature(season);
+        var temperature = request.Temperature ?? TypicalTemperature(nowUtc);
 
         // «Дом» — образ для помещения: уличная погода не важна, верхняя одежда не нужна.
         var indoor = request.Occasion == WardrobeStyle.HOME;
@@ -93,7 +93,7 @@ public static class OutfitGenerator
         var occasion = request.Occasion.ToString();
         var allowedSeasons = indoor
             ? Enum.GetNames<WardrobeSeason>().ToHashSet()
-            : AllowedSeasons(request.Temperature, temperature, season);
+            : AllowedSeasons(temperature, temperature, season);
         var inSeason = wardrobe
             .Where(x => x.Seasons.Count == 0 || x.Seasons.Any(allowedSeasons.Contains))
             .ToList();
@@ -127,8 +127,11 @@ public static class OutfitGenerator
         bool BaseFits(WardrobeItem x) => Math.Abs(x.Warmth - baseDesired) <= baseTolerance;
         bool BottomFits(WardrobeItem x) => Math.Abs(x.Warmth - baseDesired) <= bottomTolerance;
         // В сильный мороз — только тёплая обувь (не туфли и не кроссовки).
-        bool ShoesFit(WardrobeItem x) => Math.Abs(x.Warmth - desired) <= (indoor ? 1.5 : 2.0)
-                                         && (indoor || temperature >= SevereFrostBelow || x.Warmth >= 4);
+        // В лютый мороз (ниже −20) — только самая тёплая обувь, если она есть в гардеробе.
+        var minShoeWarmth = indoor || temperature >= SevereFrostBelow ? 1
+            : temperature < -20 && inSeason.Any(x => x.Category == WardrobeCategory.SHOES && x.Warmth >= 5) ? 5
+            : 4;
+        bool ShoesFit(WardrobeItem x) => Math.Abs(x.Warmth - desired) <= (indoor ? 1.5 : 2.0) && x.Warmth >= minShoeWarmth;
 
         var tops = Best(suitable.Where(x => x.Category == WardrobeCategory.TOP && BaseFits(x)), baseDesired);
         var bottoms = Best(suitable.Where(x => x.Category == WardrobeCategory.BOTTOM && BottomFits(x)), baseDesired);
@@ -138,11 +141,24 @@ public static class OutfitGenerator
         var outerwear = outerwearMode == OuterwearMode.Forbidden
             ? []
             : Best(StreetPool(WardrobeCategory.OUTERWEAR, x => x.Warmth >= minOuterWarmth && x.Warmth <= targetWarmth + 1), desired);
+        // Тёплые аксессуары подбираем по «местам»: если офисной шапки нет, берём повседневную,
+        // даже если офисные шарф и перчатки есть.
+        var warmAccessories = new List<WardrobeItem>();
+        if (desired >= 3.5 && !indoor)
+        {
+            foreach (var kind in new[] { "head", "neck", "hands" })
+            {
+                bool Warm(WardrobeItem x) => x.Warmth >= 4 && WardrobeClassifier.AccessoryKind(x.Name) == kind;
+                var own = suitable.Where(x => x.Category == WardrobeCategory.ACCESSORY && Warm(x)).ToList();
+                warmAccessories.AddRange(own.Count > 0
+                    ? own
+                    : inSeason.Where(x => x.Category == WardrobeCategory.ACCESSORY && x.Styles.Contains(casual) && Warm(x)));
+            }
+        }
+
         var accessories = Best(
             suitable.Where(x => x.Category == WardrobeCategory.ACCESSORY && Math.Abs(x.Warmth - desired) <= 2)
-                .Concat(desired >= 3.5 && !indoor
-                    ? StreetPool(WardrobeCategory.ACCESSORY, x => x.Warmth >= 4)
-                    : [])
+                .Concat(warmAccessories)
                 .DistinctBy(x => x.Id),
             desired);
 
@@ -381,6 +397,11 @@ public static class OutfitGenerator
 
         return month <= 6 ? WardrobeSeason.SPRING : WardrobeSeason.AUTUMN;
     }
+
+    /// <summary>Типичная дневная температура в Москве по месяцам (используется, если погода не задана).</summary>
+    private static readonly int[] MoscowMonthlyTemperature = [-6, -5, 0, 9, 17, 21, 23, 21, 15, 8, 1, -4];
+
+    public static int TypicalTemperature(DateTime nowUtc) => MoscowMonthlyTemperature[nowUtc.Month - 1];
 
     public static int TypicalTemperature(WardrobeSeason season) => season switch
     {

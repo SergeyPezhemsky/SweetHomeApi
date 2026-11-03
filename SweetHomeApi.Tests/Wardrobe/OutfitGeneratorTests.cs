@@ -263,6 +263,30 @@ public class OutfitGeneratorTests
     }
 
     [Fact]
+    public void OfficeInFrost_GetsCasualHatWhenNoOfficeHat()
+    {
+        var wardrobe = new List<WardrobeItem>
+        {
+            Item("blouse", WardrobeCategory.TOP, 3, "WHITE", ["OFFICE"]),
+            Item("trousers", WardrobeCategory.BOTTOM, 3, "BLACK", ["OFFICE"]),
+            Item("boots", WardrobeCategory.SHOES, 5, "BLACK", ["CASUAL", "OFFICE"]),
+            Item("puffer", WardrobeCategory.OUTERWEAR, 5, "BLACK", ["CASUAL"]),
+            Item("Шарф", WardrobeCategory.ACCESSORY, 4, "GRAY", ["CASUAL", "OFFICE"]),
+            Item("Шапка", WardrobeCategory.ACCESSORY, 4, "GRAY", ["CASUAL"])
+        };
+
+        var result = OutfitGenerator.Generate(wardrobe, new OutfitSuggestionRequest
+        {
+            Occasion = WardrobeStyle.OFFICE,
+            Temperature = -20
+        }, Now);
+
+        var outfit = Assert.Single(result.Outfits);
+        Assert.Contains(outfit.Items, x => x.Name == "Шапка");
+        Assert.Contains(outfit.Items, x => x.Name == "Шарф");
+    }
+
+    [Fact]
     public void Frost_GetsHatAndScarf()
     {
         var wardrobe = CasualWardrobe();
@@ -491,7 +515,7 @@ public class OutfitGeneratorTests
 
         Assert.Equal(WardrobeSeason.AUTUMN, result.Season);
         Assert.True(result.TemperatureAssumed);
-        Assert.Equal(OutfitGenerator.TypicalTemperature(WardrobeSeason.AUTUMN), result.Temperature);
+        Assert.Equal(OutfitGenerator.TypicalTemperature(Now), result.Temperature);
     }
 
     [Fact]
