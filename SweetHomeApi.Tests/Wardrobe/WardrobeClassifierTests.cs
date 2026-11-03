@@ -341,6 +341,14 @@ public class WardrobeClassifierTests
     }
 
     [Fact]
+    public void LightPuffer_IsNotExtraWarm_AndUggsAreNotOffice()
+    {
+        Assert.Equal(4, WardrobeClassifier.Classify("Пуховик лёгкий").Warmth);
+        Assert.Equal(3, WardrobeClassifier.Classify("Пуховый жилет").Warmth);
+        Assert.DoesNotContain("OFFICE", WardrobeClassifier.Classify("Угги").Styles);
+    }
+
+    [Fact]
     public void DarkBlue_IsNotAlsoBlue()
     {
         var result = WardrobeClassifier.Classify("Тёмно-синий пиджак");

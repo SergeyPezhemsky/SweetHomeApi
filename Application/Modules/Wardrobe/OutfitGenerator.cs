@@ -143,7 +143,14 @@ public static class OutfitGenerator
         var minShoeWarmth = indoor || temperature >= SevereFrostBelow ? 1
             : temperature <= -18 && inSeason.Any(x => x.Category == WardrobeCategory.SHOES && x.Warmth >= 5) ? 5
             : 4;
-        bool ShoesFit(WardrobeItem x) => Math.Abs(x.Warmth - desired) <= (indoor ? 1.5 : 2.0) && x.Warmth >= minShoeWarmth;
+        // Для спорта зимние кроссовки подходят и в мороз (они легче ботинок по шкале, но для бега — правильный выбор),
+        // а обувь на каблуке не подходит никогда.
+        var sport = request.Occasion == WardrobeStyle.SPORT;
+        bool WinterSportShoe(WardrobeItem x) => x.Styles.Contains(nameof(WardrobeStyle.SPORT))
+                                               && x.Seasons.Contains(nameof(WardrobeSeason.WINTER)) && x.Warmth >= 3;
+        bool ShoesFit(WardrobeItem x) =>
+            (Math.Abs(x.Warmth - desired) <= (indoor ? 1.5 : 2.0) && x.Warmth >= minShoeWarmth || (sport && WinterSportShoe(x)))
+            && !(sport && WardrobeClassifier.IsHeeled(x.Name));
 
         var tops = Best(suitable.Where(x => x.Category == WardrobeCategory.TOP && BaseFits(x)), baseDesired);
         var bottoms = Best(suitable.Where(x => x.Category == WardrobeCategory.BOTTOM && BottomFits(x)), baseDesired);
@@ -368,7 +375,7 @@ public static class OutfitGenerator
         var seasons = new HashSet<string>();
         if (temperature >= 15)
             seasons.Add(nameof(WardrobeSeason.SUMMER));
-        if (temperature is > 0 and < 22)
+        if (temperature is >= 0 and < 22)
         {
             seasons.Add(nameof(WardrobeSeason.SPRING));
             seasons.Add(nameof(WardrobeSeason.AUTUMN));

@@ -110,7 +110,9 @@ public static class WardrobeClassifier
         new(["кеды", "кед", "кедики", "converse"], WardrobeCategory.SHOES, 2, Warm, [Casual], ExactOnly: true),
         new(["ботильон"], WardrobeCategory.SHOES, 4, [Spring, Autumn, Winter], [Casual, Office, Formal]),
         new(["ботин", "полусапож", "boot", "челси", "chelsea", "берц", "тимберленд", "мартинс", "martens", "казаки"], WardrobeCategory.SHOES, 4, [Spring, Autumn, Winter], [Casual, Office]),
-        new(["сапог", "сапож", "snow boot", "ботфорт", "валенк", "угги", "ugg", "дутик"], WardrobeCategory.SHOES, 5, [Winter], [Casual, Office]),
+        new(["сапог", "сапож", "snow boot", "ботфорт"], WardrobeCategory.SHOES, 5, [Winter], [Casual, Office]),
+        // Угги, валенки, дутики — тёплые, но не для офиса и не для праздника.
+        new(["валенк", "угги", "ugg", "дутик"], WardrobeCategory.SHOES, 5, [Winter], [Casual]),
         new(["туфл", "туфельк", "лодочк", "шпильк", "heels", "heel", "pumps", "oxford", "оксфорд", "дерби", "derby", "броги", "brogue", "dress shoe", "oxford shoe", "derby shoe", "leather shoe"], WardrobeCategory.SHOES, 2, [Spring, Summer, Autumn], [Office, Formal]),
         new(["лофер", "loafer", "мокасин", "moccasin", "балетк", "ballet", "мюли", "сабо", "mules", "clogs"], WardrobeCategory.SHOES, 2, [Spring, Summer, Autumn], [Casual, Office]),
         new(["босонож", "сандал", "sandal", "шлеп", "сланц", "flip-flop", "flip flop", "вьетнамк", "эспадрил", "espadrille"], WardrobeCategory.SHOES, 1, [Summer], [Casual]),
@@ -145,7 +147,8 @@ public static class WardrobeClassifier
         // «на меху», «на пуху», «меховой»: однозначно зимняя вещь.
         new(["мех", "меху", "fur", "furry", "пуху"], WarmthDelta: 1, Seasons: [Winter], ExactOnly: true, WinterSignal: true),
         new(["меховой", "меховая", "меховые", "меховым"], WarmthDelta: 1, Seasons: [Winter], ExactOnly: true, WinterSignal: true),
-        new(["пухов"], WarmthDelta: 1, Seasons: [Winter], WinterSignal: true),
+        // «Пуховый жилет», но не само слово «пуховик» (иначе «пуховик лёгкий» стал бы теплее обычного).
+        new(["пуховый", "пуховая", "пуховое", "пуховые", "пуховой", "пуховым", "пуховую"], WarmthDelta: 1, Seasons: [Winter], ExactOnly: true, WinterSignal: true),
         new(["летн", "summer"], WarmthDelta: -1, Seasons: [Summer]),
         new(["легк", "тонк", "light", "thin"], WarmthDelta: -1),
         new(["льнян", "linen", "сетк"], WarmthDelta: -1, Seasons: Warm, SkipForAccessories: true),
@@ -384,6 +387,17 @@ public static class WardrobeClassifier
         if (Has("ремень", "ремн", "пояс", "belt"))
             return "waist";
         return "other";
+    }
+
+    /// <summary>Обувь на каблуке — не для спорта.</summary>
+    public static bool IsHeeled(string? name)
+    {
+        var tokens = Tokenize(Normalize(name ?? string.Empty));
+        return tokens.Any(t => t.StartsWith("каблук", StringComparison.Ordinal)
+                               || t.StartsWith("шпильк", StringComparison.Ordinal)
+                               || t.StartsWith("лодочк", StringComparison.Ordinal)
+                               || t.StartsWith("ботильон", StringComparison.Ordinal)
+                               || MatchesLatin(t, "heel") || MatchesLatin(t, "pump"));
     }
 
     /// <summary>Рубашка или сорочка — к ним уместен галстук.</summary>

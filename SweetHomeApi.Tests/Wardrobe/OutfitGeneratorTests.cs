@@ -213,6 +213,34 @@ public class OutfitGeneratorTests
             Assert.True(o.Items.Single(x => x.Category == WardrobeCategory.OUTERWEAR).Warmth >= 4));
     }
 
+    [Theory]
+    [InlineData(-20)]
+    [InlineData(-5)]
+    [InlineData(0)]
+    public void SportInFrost_UsesWinterSneakersNotHeels(int temperature)
+    {
+        var wardrobe = new List<WardrobeItem>
+        {
+            Item("hoodie", WardrobeCategory.TOP, 3, "GRAY", ["CASUAL", "SPORT"]),
+            Item("leggings", WardrobeCategory.BOTTOM, 2, "BLACK", ["CASUAL", "SPORT"]),
+            Item("puffer", WardrobeCategory.OUTERWEAR, 5, "BLACK", ["CASUAL", "SPORT"]),
+            Item("Сапоги зимние на каблуке", WardrobeCategory.SHOES, 5, "BLACK", ["CASUAL", "OFFICE"], ["WINTER"]),
+            Item("Угги", WardrobeCategory.SHOES, 5, "BEIGE", ["CASUAL"], ["WINTER"]),
+            Item("Зимние кроссовки", WardrobeCategory.SHOES, 3, "BLACK", ["CASUAL", "SPORT"], ["WINTER"])
+        };
+
+        var result = OutfitGenerator.Generate(wardrobe, new OutfitSuggestionRequest
+        {
+            Occasion = WardrobeStyle.SPORT,
+            Temperature = temperature,
+            Count = 3
+        }, Now);
+
+        Assert.NotEmpty(result.Outfits);
+        Assert.All(result.Outfits, o => Assert.DoesNotContain(o.Items, x => x.Name.Contains("каблук")));
+        Assert.Contains(result.Outfits[0].Items, x => x.Name == "Зимние кроссовки");
+    }
+
     [Fact]
     public void Tie_IsNeverAddedToDress()
     {
