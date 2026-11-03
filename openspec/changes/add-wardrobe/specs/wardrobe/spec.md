@@ -18,7 +18,7 @@ Every endpoint under `api/v1/wardrobe` SHALL require an authenticated session an
 `GET api/v1/wardrobe/dictionaries` SHALL return categories, seasons, styles, colours (`code`, Russian `name`, `hex`, `neutral`) and warmth levels (1..5 with Russian names).
 
 ### Requirement: Item CRUD
-- `GET api/v1/wardrobe/items` SHALL return the user's items without image bytes, each with `hasImage` and `imageUpdatedAt`, filterable by `query` (name/brand/notes, case-insensitive), `category`, `season`, `style`, `color`, `favorite`, sorted by `createdAt` desc, plus `total` and per-category `counts`.
+- `GET api/v1/wardrobe/items` SHALL return the user's items without image bytes, each with `hasImage` and `imageUpdatedAt`, filterable by `query` (name/brand/notes, case-insensitive), `category`, `season`, `style`, `color`, `favorite`, sorted by `createdAt` desc, plus `total` (matching items) and `counts` (items per category in the whole wardrobe, all six categories present).
 - `POST api/v1/wardrobe/items` SHALL validate: name required ≤ 120; category valid; 1..3 known colours; known seasons; ≥ 1 known style; warmth 1..5; brand ≤ 80; notes ≤ 1000. Errors use the existing `ErrorResponseDto` shape with `VALIDATION_ERROR` and per-field details. Success returns `201` with the created item.
 - `GET/PUT/DELETE api/v1/wardrobe/items/{id}` SHALL behave like Movies (404 `WARDROBE_ITEM_NOT_FOUND`).
 - Deleting an item SHALL remove it from saved outfits; outfits left with fewer than 2 items SHALL be deleted.

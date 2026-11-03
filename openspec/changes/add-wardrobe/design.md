@@ -16,8 +16,7 @@
 | Brand | text? ≤ 80 | |
 | Notes | text? ≤ 1000 | |
 | IsFavorite | bool | |
-| ImageData | bytea? | ≤ 5 MB, JPEG/PNG/WEBP only (magic bytes checked) |
-| ImageContentType | text? | |
+| HasImage | bool | photo bytes live in `WardrobeItemImages` |
 | ImageUpdatedAt | timestamptz? | used as cache-buster |
 | WearCount | int | |
 | LastWornAt | timestamptz? | |
@@ -25,7 +24,9 @@
 
 `WardrobeOutfit`: Id, UserId, Name (1..80), ItemIds text[] (2..8, all owned by user), Occasion (style code), Temperature int?, Note ≤ 500, WearCount, LastWornAt, CreatedAt, UpdatedAt.
 
-Images are stored in the database (home-scale project, single Postgres volume already backed up) and never returned in list responses; they are served by a dedicated endpoint.
+`WardrobeItemImage`: ItemId (PK, FK → WardrobeItems, cascade), Data bytea (≤ 5 MB, JPEG/PNG/WEBP verified by magic bytes), ContentType, UpdatedAt.
+
+Images are stored in the database (home-scale project, single Postgres volume) in a separate table so item lists never load photo bytes; they are served by a dedicated endpoint. nginx `client_max_body_size` for `/api/` is raised to 6 MB.
 
 ## Classifier
 Pure function `WardrobeClassifier.Classify(name, notes, colorHex)`:
