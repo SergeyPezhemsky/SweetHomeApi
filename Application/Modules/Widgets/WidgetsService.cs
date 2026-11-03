@@ -18,7 +18,29 @@ public class WidgetsService : IWidgetsService
     /// <returns>Список виджетов.</returns>
     public async Task<List<MainWidget>> GetUserWidgetsAsync(string userId)
     {
-        return await _mainWidgetRepository.GetByUserIdAsync(userId);
+        var widgets = await _mainWidgetRepository.GetByUserIdAsync(userId);
+
+        // Пользователь без виджетов ещё не прошёл регистрацию полностью — ничего не добавляем.
+        if (widgets.Count == 0)
+            return widgets;
+
+        var missing = new List<MainWidget>();
+        var nextOrder = widgets.Max(w => w.Order) + 1;
+        foreach (var alias in DefaultMainWidgets.BackfilledAliases)
+        {
+            if (widgets.Any(w => string.Equals(w.Alias, alias, StringComparison.OrdinalIgnoreCase)))
+                continue;
+
+            var widget = DefaultMainWidgets.CreateBackfilledWidget(alias, userId, nextOrder++);
+            if (widget is not null)
+                missing.Add(widget);
+        }
+
+        if (missing.Count == 0)
+            return widgets;
+
+        await _mainWidgetRepository.AddManyAsync(missing);
+        return [..widgets, ..missing];
     }
 
     /// <summary>

@@ -71,8 +71,35 @@ public static class DefaultMainWidgets
                 Size = 3,
                 Hide = false,
                 UserId = userId
-            }
+            },
+            CreateWardrobeWidget(userId, 8)
+        };
+    }
+
+    public const string WardrobeAlias = "wardrobe";
+
+    /// <summary>
+    /// Виджеты, которые появились после первых регистраций и должны быть добавлены существующим пользователям.
+    /// </summary>
+    public static IReadOnlyList<string> BackfilledAliases { get; } = [WardrobeAlias];
+
+    public static MainWidget? CreateBackfilledWidget(string alias, string userId, int order)
+    {
+        return alias == WardrobeAlias ? CreateWardrobeWidget(userId, order) : null;
+    }
+
+    private static MainWidget CreateWardrobeWidget(string userId, int order)
+    {
+        return new MainWidget
+        {
+            Id = Guid.NewGuid().ToString(),
+            Alias = WardrobeAlias,
+            Order = order,
+            Name = "Гардероб",
+            Icon = "checkroom",
+            Size = 2,
+            Hide = false,
+            UserId = userId
         };
     }
 }
-

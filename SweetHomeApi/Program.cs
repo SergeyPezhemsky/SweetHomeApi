@@ -146,6 +146,7 @@ using (var scope = app.Services.CreateScope())
         context.Database.Migrate();
         ApplySmartHomeSchemaGuard(context);
         ApplyMoviesSchemaGuard(context);
+        ApplyWardrobeSchemaGuard(context);
     }
     catch (Exception ex)
     {
@@ -260,5 +261,73 @@ static void ApplyMoviesSchemaGuard(SweetHomeDbContext context)
             CONSTRAINT "PK_MovieShareSettings" PRIMARY KEY ("UserId"),
             CONSTRAINT "FK_MovieShareSettings_AspNetUsers_UserId" FOREIGN KEY ("UserId") REFERENCES "AspNetUsers" ("Id") ON DELETE CASCADE
         );
+        """);
+}
+
+static void ApplyWardrobeSchemaGuard(SweetHomeDbContext context)
+{
+    // Страховка на случай, если миграция AddWardrobe не была применена (по аналогии с Movies).
+    context.Database.ExecuteSqlRaw("""
+        CREATE TABLE IF NOT EXISTS "WardrobeItems" (
+            "Id" text NOT NULL,
+            "Name" character varying(120) NOT NULL,
+            "Category" text NOT NULL,
+            "Colors" text[] NOT NULL,
+            "Seasons" text[] NOT NULL,
+            "Styles" text[] NOT NULL,
+            "Warmth" integer NOT NULL,
+            "Brand" character varying(80) NULL,
+            "Notes" character varying(1000) NULL,
+            "IsFavorite" boolean NOT NULL,
+            "HasImage" boolean NOT NULL,
+            "ImageUpdatedAt" timestamp with time zone NULL,
+            "WearCount" integer NOT NULL,
+            "LastWornAt" timestamp with time zone NULL,
+            "CreatedAt" timestamp with time zone NOT NULL,
+            "UpdatedAt" timestamp with time zone NOT NULL,
+            "UserId" text NOT NULL,
+            CONSTRAINT "PK_WardrobeItems" PRIMARY KEY ("Id"),
+            CONSTRAINT "FK_WardrobeItems_AspNetUsers_UserId" FOREIGN KEY ("UserId") REFERENCES "AspNetUsers" ("Id") ON DELETE CASCADE
+        );
+
+        CREATE INDEX IF NOT EXISTS "IX_WardrobeItems_CreatedAt"
+            ON "WardrobeItems" ("CreatedAt");
+
+        CREATE INDEX IF NOT EXISTS "IX_WardrobeItems_UserId"
+            ON "WardrobeItems" ("UserId");
+
+        CREATE INDEX IF NOT EXISTS "IX_WardrobeItems_UserId_Category"
+            ON "WardrobeItems" ("UserId", "Category");
+
+        CREATE TABLE IF NOT EXISTS "WardrobeItemImages" (
+            "ItemId" text NOT NULL,
+            "Data" bytea NOT NULL,
+            "ContentType" text NOT NULL,
+            "UpdatedAt" timestamp with time zone NOT NULL,
+            CONSTRAINT "PK_WardrobeItemImages" PRIMARY KEY ("ItemId"),
+            CONSTRAINT "FK_WardrobeItemImages_WardrobeItems_ItemId" FOREIGN KEY ("ItemId") REFERENCES "WardrobeItems" ("Id") ON DELETE CASCADE
+        );
+
+        CREATE TABLE IF NOT EXISTS "WardrobeOutfits" (
+            "Id" text NOT NULL,
+            "Name" character varying(80) NOT NULL,
+            "ItemIds" text[] NOT NULL,
+            "Occasion" text NOT NULL,
+            "Temperature" integer NULL,
+            "Note" character varying(500) NULL,
+            "WearCount" integer NOT NULL,
+            "LastWornAt" timestamp with time zone NULL,
+            "CreatedAt" timestamp with time zone NOT NULL,
+            "UpdatedAt" timestamp with time zone NOT NULL,
+            "UserId" text NOT NULL,
+            CONSTRAINT "PK_WardrobeOutfits" PRIMARY KEY ("Id"),
+            CONSTRAINT "FK_WardrobeOutfits_AspNetUsers_UserId" FOREIGN KEY ("UserId") REFERENCES "AspNetUsers" ("Id") ON DELETE CASCADE
+        );
+
+        CREATE INDEX IF NOT EXISTS "IX_WardrobeOutfits_CreatedAt"
+            ON "WardrobeOutfits" ("CreatedAt");
+
+        CREATE INDEX IF NOT EXISTS "IX_WardrobeOutfits_UserId"
+            ON "WardrobeOutfits" ("UserId");
         """);
 }
