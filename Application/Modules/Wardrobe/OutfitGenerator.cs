@@ -69,10 +69,18 @@ public static class OutfitGenerator
         var temperatureAssumed = request.Temperature is null;
         var season = ResolveSeason(request.Temperature, nowUtc);
         var temperature = request.Temperature ?? TypicalTemperature(season);
-        var targetWarmth = TargetWarmth(temperature);
-        var outerwearMode = temperature < OuterwearRequiredBelow
-            ? OuterwearMode.Required
-            : temperature > OuterwearForbiddenAbove ? OuterwearMode.Forbidden : OuterwearMode.Optional;
+
+        // «Дом» — образ для помещения: уличная погода не важна, верхняя одежда не нужна.
+        var indoor = request.Occasion == WardrobeStyle.HOME;
+        var effectiveTemperature = indoor ? IndoorTemperature : temperature;
+        var targetWarmth = TargetWarmth(effectiveTemperature);
+        var desired = DesiredWarmth(effectiveTemperature);
+        var baseDesired = Math.Min(desired, 4.0);
+        var outerwearMode = indoor
+            ? OuterwearMode.Forbidden
+            : temperature < OuterwearRequiredBelow
+                ? OuterwearMode.Required
+                : temperature > OuterwearForbiddenAbove ? OuterwearMode.Forbidden : OuterwearMode.Optional;
 
         var result = new OutfitSuggestionResult
         {
@@ -83,33 +91,58 @@ public static class OutfitGenerator
         };
 
         var occasion = request.Occasion.ToString();
-        var allowedSeasons = AllowedSeasons(request.Temperature, temperature, season);
-        var suitable = wardrobe
-            .Where(x => x.Styles.Contains(occasion))
+        var allowedSeasons = indoor
+            ? Enum.GetNames<WardrobeSeason>().ToHashSet()
+            : AllowedSeasons(request.Temperature, temperature, season);
+        var inSeason = wardrobe
             .Where(x => x.Seasons.Count == 0 || x.Seasons.Any(allowedSeasons.Contains))
             .ToList();
+        var suitable = inSeason.Where(x => x.Styles.Contains(occasion)).ToList();
 
-        var baseWarmth = Math.Min(targetWarmth, 4);
-        List<WardrobeItem> Slot(WardrobeCategory category, Func<WardrobeItem, bool> fits, int desired) => suitable
-            .Where(x => x.Category == category && fits(x))
-            .OrderByDescending(x => ItemScore(x, desired, nowUtc, seed))
+        // Уличные вещи (верхняя одежда, обувь, тёплые аксессуары): если для повода своих нет,
+        // берём повседневные — зимние ботинки в офис лучше, чем никакой подборки.
+        var casual = nameof(WardrobeStyle.CASUAL);
+        List<WardrobeItem> StreetPool(WardrobeCategory category, Func<WardrobeItem, bool> fits)
+        {
+            var own = suitable.Where(x => x.Category == category && fits(x)).ToList();
+            if (own.Count > 0 || indoor)
+                return own;
+
+            return inSeason.Where(x => x.Category == category && x.Styles.Contains(casual) && fits(x)).ToList();
+        }
+
+        List<WardrobeItem> Best(IEnumerable<WardrobeItem> pool, double want) => pool
+            .OrderByDescending(x => ItemScore(x, want, nowUtc, seed))
             .ThenBy(x => x.Id, StringComparer.Ordinal)
             .Take(CandidatesPerSlot)
             .ToList();
 
-        // В жару допускаем только лёгкие вещи (±1), в остальное время — ±2 от нужной теплоты.
-        var baseTolerance = targetWarmth <= 2 ? 1 : 2;
-        bool BaseFits(WardrobeItem x) => Math.Abs(x.Warmth - baseWarmth) <= baseTolerance;
+        // Допуск по теплоте базового слоя: в тепло ±1.2 (без утеплённых брюк при +20), в мороз ±1.5
+        // (без лёгкого платья под пуховик), в остальное время ±2.
+        // Для низа в мороз оставляем ±2: джинсы под пуховиком зимой — нормально.
+        // Строгий морозный допуск — только для уличных поводов: в офис и на праздник под пальто носят рубашку.
+        var streetOccasion = request.Occasion is WardrobeStyle.CASUAL or WardrobeStyle.SPORT;
+        var baseTolerance = desired <= 2.5 ? 1.2 : desired >= 4.5 && streetOccasion ? 1.5 : 2.0;
+        var bottomTolerance = desired <= 2.5 ? 1.2 : 2.0;
+        bool BaseFits(WardrobeItem x) => Math.Abs(x.Warmth - baseDesired) <= baseTolerance;
+        bool BottomFits(WardrobeItem x) => Math.Abs(x.Warmth - baseDesired) <= bottomTolerance;
+        bool ShoesFit(WardrobeItem x) => Math.Abs(x.Warmth - desired) <= (indoor ? 1.5 : 2.0);
 
-        var tops = Slot(WardrobeCategory.TOP, BaseFits, baseWarmth);
-        var bottoms = Slot(WardrobeCategory.BOTTOM, BaseFits, baseWarmth);
-        var dresses = Slot(WardrobeCategory.DRESS, BaseFits, baseWarmth);
-        var shoes = Slot(WardrobeCategory.SHOES, x => Math.Abs(x.Warmth - targetWarmth) <= 2, targetWarmth);
+        var tops = Best(suitable.Where(x => x.Category == WardrobeCategory.TOP && BaseFits(x)), baseDesired);
+        var bottoms = Best(suitable.Where(x => x.Category == WardrobeCategory.BOTTOM && BottomFits(x)), baseDesired);
+        var dresses = Best(suitable.Where(x => x.Category == WardrobeCategory.DRESS && BaseFits(x)), baseDesired);
+        var shoes = Best(StreetPool(WardrobeCategory.SHOES, ShoesFit), desired);
         var minOuterWarmth = MinOuterwearWarmth(temperature, targetWarmth);
         var outerwear = outerwearMode == OuterwearMode.Forbidden
             ? []
-            : Slot(WardrobeCategory.OUTERWEAR, x => x.Warmth >= minOuterWarmth && x.Warmth <= targetWarmth + 1, targetWarmth);
-        var accessories = Slot(WardrobeCategory.ACCESSORY, x => Math.Abs(x.Warmth - targetWarmth) <= 2, targetWarmth);
+            : Best(StreetPool(WardrobeCategory.OUTERWEAR, x => x.Warmth >= minOuterWarmth && x.Warmth <= targetWarmth + 1), desired);
+        var accessories = Best(
+            suitable.Where(x => x.Category == WardrobeCategory.ACCESSORY && Math.Abs(x.Warmth - desired) <= 2)
+                .Concat(desired >= 3.5 && !indoor
+                    ? StreetPool(WardrobeCategory.ACCESSORY, x => x.Warmth >= 4)
+                    : [])
+                .DistinctBy(x => x.Id),
+            desired);
 
         FillMissing(result, request.Occasion, season, targetWarmth, minOuterWarmth, outerwearMode, tops, bottoms, dresses, shoes, outerwear);
         if (result.Missing.Count > 0)
@@ -122,6 +155,11 @@ public static class OutfitGenerator
             _ => outerwear.Select(x => (WardrobeItem?)x).Prepend(null).ToList()
         };
 
+        // В межсезонье куртка тем менее уместна, чем теплее: при +22 почти всегда без неё.
+        var optionalOuterPenalty = outerwearMode == OuterwearMode.Optional
+            ? 8.0 * (temperature - OuterwearRequiredBelow + 1) / (OuterwearForbiddenAbove - OuterwearRequiredBelow + 1)
+            : 0;
+
         var bases = new List<List<WardrobeItem>>();
         foreach (var top in tops)
         foreach (var bottom in bottoms)
@@ -129,7 +167,9 @@ public static class OutfitGenerator
         foreach (var dress in dresses)
             bases.Add([dress]);
 
-        // Сначала оцениваем образы без аксессуаров, затем подбираем аксессуар только лучшим —
+        var context = new ScoreContext(baseDesired, desired, nowUtc, seed);
+
+        // Сначала оцениваем образы без аксессуаров, затем подбираем аксессуары только лучшим —
         // так перебор не умножается на число аксессуаров.
         var draft = new List<(List<WardrobeItem> Items, double Score)>();
         foreach (var baseItems in bases)
@@ -143,8 +183,12 @@ public static class OutfitGenerator
             if (outer is not null)
                 items.Add(outer);
 
-            draft.Add((items, OutfitScore(items, baseWarmth, targetWarmth, nowUtc, seed)));
+            var score = OutfitScore(items, context) - (outer is not null ? optionalOuterPenalty : 0);
+            draft.Add((items, score));
         }
+
+        // В холод допускаем комплект тёплых аксессуаров (шапка + шарф + перчатки), иначе — один.
+        var maxAccessories = desired >= 3.5 && !indoor ? 3 : 1;
 
         var candidates = new List<Candidate>();
         foreach (var (items, baseScore) in draft
@@ -153,28 +197,45 @@ public static class OutfitGenerator
                      .Take(AccessoryCandidates))
         {
             var score = baseScore;
-            var hasDress = items.Any(x => x.Category == WardrobeCategory.DRESS);
+            // Галстук — только к рубашке (не к платью, водолазке или футболке).
+            var tieAllowed = items.Any(x => x.Category == WardrobeCategory.TOP && WardrobeClassifier.IsShirt(x.Name));
+            var outerPenalty = items.Any(x => x.Category == WardrobeCategory.OUTERWEAR) ? optionalOuterPenalty : 0;
+            var kinds = new HashSet<string>();
+            var added = 0;
 
-            // Аксессуар добавляем, только если он не снижает оценку образа; за законченность образа +2.
-            WardrobeItem? bestAccessory = null;
-            var bestWithAccessory = score;
-            foreach (var accessory in accessories)
+            // Аксессуары добавляем по одному на «место» (голова, шея, руки, сумка), пока они не снижают оценку.
+            while (added < maxAccessories)
             {
-                if (hasDress && WardrobeClassifier.IsNeckwear(accessory.Name))
-                    continue;
-
-                var withAccessory = OutfitScore([..items, accessory], baseWarmth, targetWarmth, nowUtc, seed);
-                if (withAccessory >= bestWithAccessory)
+                WardrobeItem? bestAccessory = null;
+                var bestWithAccessory = score;
+                foreach (var accessory in accessories)
                 {
-                    bestWithAccessory = withAccessory;
-                    bestAccessory = accessory;
-                }
-            }
+                    if (items.Contains(accessory) || (!tieAllowed && WardrobeClassifier.IsNeckwear(accessory.Name)))
+                        continue;
 
-            if (bestAccessory is not null)
-            {
+                    var kind = WardrobeClassifier.AccessoryKind(accessory.Name);
+                    if (kinds.Contains(kind))
+                        continue;
+
+                    // Бонус за законченность — только тёплым аксессуарам в холод (шапка, шарф, перчатки).
+                    // Остальные (ремень, сумка, часы) добавляем, только если они действительно улучшают образ.
+                    var warmSet = maxAccessories > 1 && accessory.Warmth >= 4 && kind is "head" or "neck" or "hands";
+                    var withAccessory = OutfitScore([..items, accessory], context) - outerPenalty
+                                        + (warmSet ? AccessoryBonus * (added + 1) : 0);
+                    if (warmSet ? withAccessory >= bestWithAccessory : withAccessory > bestWithAccessory + 0.5)
+                    {
+                        bestWithAccessory = withAccessory;
+                        bestAccessory = accessory;
+                    }
+                }
+
+                if (bestAccessory is null)
+                    break;
+
                 items.Add(bestAccessory);
-                score = bestWithAccessory + AccessoryBonus;
+                kinds.Add(WardrobeClassifier.AccessoryKind(bestAccessory.Name));
+                score = bestWithAccessory;
+                added++;
             }
 
             candidates.Add(new Candidate
@@ -228,7 +289,9 @@ public static class OutfitGenerator
             {
                 Items = SortItems(best.Items),
                 Score = (int)Math.Round(Math.Clamp(best.Score, 0, 100)),
-                Reasons = BuildReasons(best.Items, temperature, temperatureAssumed, nowUtc)
+                Reasons = indoor
+                    ? BuildIndoorReasons(best.Items, nowUtc)
+                    : BuildReasons(best.Items, temperature, temperatureAssumed, nowUtc)
             });
         }
 
@@ -236,6 +299,14 @@ public static class OutfitGenerator
         result.Outfits = result.Outfits.OrderByDescending(x => x.Score).ToList();
         return result;
     }
+
+    /// <summary>Комнатная температура для повода «Дом».</summary>
+    public const int IndoorTemperature = 22;
+
+    /// <summary>
+    /// Непрерывная «нужная теплота» 1..5: +25 °C → 1, +15 → 2, +5 → 3, −5 → 4, −15 и ниже → 5.
+    /// </summary>
+    public static double DesiredWarmth(int temperature) => Math.Clamp(1 + (25 - temperature) / 10.0, 1, 5);
 
     public static int TargetWarmth(int temperature) => temperature switch
     {
@@ -355,7 +426,9 @@ public static class OutfitGenerator
         }
     }
 
-    private static double ItemScore(WardrobeItem item, int desiredWarmth, DateTime nowUtc, int seed)
+    private sealed record ScoreContext(double BaseDesired, double Desired, DateTime NowUtc, int Seed);
+
+    private static double ItemScore(WardrobeItem item, double desiredWarmth, DateTime nowUtc, int seed)
     {
         return 10 - 3 * Math.Abs(item.Warmth - desiredWarmth)
                + 4 * Freshness(item, nowUtc)
@@ -363,29 +436,37 @@ public static class OutfitGenerator
                + Jitter(item.Id, seed);
     }
 
-    private static double OutfitScore(List<WardrobeItem> items, int baseWarmth, int targetWarmth, DateTime nowUtc, int seed)
+    private static double OutfitScore(List<WardrobeItem> items, ScoreContext context)
     {
-        // Теплота: 35 баллов.
+        // Теплота: 35 баллов. Нужная теплота непрерывна по температуре: +10 и +17 — разные образы.
         var warmthPenalty = items.Sum(x =>
         {
             var desired = x.Category is WardrobeCategory.OUTERWEAR or WardrobeCategory.SHOES or WardrobeCategory.ACCESSORY
-                ? targetWarmth
-                : baseWarmth;
+                ? context.Desired
+                : context.BaseDesired;
             return Math.Abs(x.Warmth - desired);
         });
-        var warmthScore = Math.Max(0, 35 - 7.0 * warmthPenalty / items.Count * 2);
+        var warmthScore = Math.Max(0, 35 - 14.0 * warmthPenalty / items.Count);
+
+        // Согласованность «улицы»: лёгкая куртка с зимними сапогами и шапкой выглядит странно.
+        var street = items
+            .Where(x => x.Category is WardrobeCategory.OUTERWEAR or WardrobeCategory.SHOES
+                        || (x.Category == WardrobeCategory.ACCESSORY && x.Warmth >= 4))
+            .Select(x => x.Warmth)
+            .ToList();
+        var coherencePenalty = street.Count >= 2 ? 8.0 * Math.Max(0, street.Max() - street.Min() - 1) : 0;
 
         // Цвет: 35 баллов.
         var colorScore = ColorHarmony(items);
 
         // Свежесть: 20 баллов.
-        var freshnessScore = 20 * items.Average(x => Freshness(x, nowUtc));
+        var freshnessScore = 20 * items.Average(x => Freshness(x, context.NowUtc));
 
         // Любимые вещи: 10 баллов.
         var favoriteScore = 10.0 * items.Count(x => x.IsFavorite) / items.Count;
 
-        var jitter = items.Sum(x => Jitter(x.Id, seed)) / items.Count * 2;
-        return warmthScore + colorScore + freshnessScore + favoriteScore + jitter;
+        var jitter = items.Sum(x => Jitter(x.Id, context.Seed)) / items.Count * 2;
+        return warmthScore - coherencePenalty + colorScore + freshnessScore + favoriteScore + jitter;
     }
 
     public static double ColorHarmony(IReadOnlyCollection<WardrobeItem> items)
@@ -483,6 +564,15 @@ public static class OutfitGenerator
             WardrobeCategory.BOTTOM, WardrobeCategory.SHOES, WardrobeCategory.ACCESSORY
         };
         return items.OrderBy(x => Array.IndexOf(order, x.Category)).ToList();
+    }
+
+    private static List<string> BuildIndoorReasons(List<WardrobeItem> items, DateTime nowUtc)
+    {
+        var reasons = new List<string> { "Для дома: удобно и без верхней одежды" };
+        var favorite = items.FirstOrDefault(x => x.IsFavorite);
+        if (favorite is not null)
+            reasons.Add($"Любимая вещь: {LowerFirst(favorite.Name)}");
+        return reasons;
     }
 
     private static List<string> BuildReasons(List<WardrobeItem> items, int temperature, bool temperatureAssumed, DateTime nowUtc)

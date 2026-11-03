@@ -62,8 +62,7 @@ public class WardrobeService(IWardrobeRepository repository, TimeProvider? timeP
         existing.UpdatedAt = UtcNow;
         Normalize(existing);
 
-        await repository.UpdateItemAsync(existing);
-        return existing;
+        return await repository.UpdateItemAsync(existing) ? existing : null;
     }
 
     public async Task<bool> DeleteItemAsync(string userId, string itemId)

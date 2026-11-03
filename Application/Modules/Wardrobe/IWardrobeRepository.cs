@@ -11,7 +11,8 @@ public interface IWardrobeRepository
     Task<List<WardrobeItem>> GetItemsByIdsAsNoTrackingAsync(string userId, IReadOnlyCollection<string> itemIds);
     Task<WardrobeOutfit?> GetOutfitAsNoTrackingAsync(string userId, string outfitId);
     Task AddItemAsync(WardrobeItem item);
-    Task UpdateItemAsync(WardrobeItem item);
+    /// <summary>Сохраняет изменения вещи. Возвращает false, если вещь успели удалить.</summary>
+    Task<bool> UpdateItemAsync(WardrobeItem item);
 
     /// <summary>Удаляет вещь, убирает её из образов и удаляет образы, где осталось меньше двух вещей.</summary>
     Task DeleteItemAsync(WardrobeItem item);

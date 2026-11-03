@@ -193,7 +193,10 @@ public class WardrobeController(IWardrobeService wardrobeService, UserManager<Id
         }
         catch (Exception ex) when (ex is InvalidDataException or IOException or BadHttpRequestException)
         {
-            return BadRequest(ValidationError([new ErrorDetailDto { Field = "file", Message = "Фото должно быть не больше 5 МБ" }]));
+            var tooLarge = ex is BadHttpRequestException { StatusCode: StatusCodes.Status413PayloadTooLarge }
+                           || ex.Message.Contains("length limit", StringComparison.OrdinalIgnoreCase);
+            var message = tooLarge ? "Фото должно быть не больше 5 МБ" : "Не удалось прочитать файл. Попробуйте загрузить фото ещё раз";
+            return BadRequest(ValidationError([new ErrorDetailDto { Field = "file", Message = message }]));
         }
 
         if (file is null || file.Length == 0)
@@ -626,6 +629,8 @@ public sealed class WardrobeModelStateErrorsAttribute : ActionFilterAttribute
         // Ошибка «не удалось собрать dto» дублирует ошибку конкретного поля — оставляем только поле.
         if (details.Count > 1)
             details = details.Where(x => x.Field is not ("dto" or "body")).ToList();
+        if (details.Count == 1 && details[0].Field == "dto")
+            details[0] = new ErrorDetailDto { Field = "body", Message = "Тело запроса пустое или не является корректным JSON" };
 
         context.Result = new BadRequestObjectResult(new ErrorResponseDto
         {

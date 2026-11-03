@@ -64,7 +64,7 @@ Every endpoint under `api/v1/wardrobe` SHALL require an authenticated session an
 - THEN every item in every outfit has style `OFFICE`.
 
 #### Scenario: Valid structure
-- THEN each outfit is either `TOP + BOTTOM + SHOES` or `DRESS + SHOES`, plus optional outerwear and at most one accessory, and outfits have distinct item sets.
+- THEN each outfit is either `TOP + BOTTOM + SHOES` or `DRESS + SHOES`, plus optional outerwear and accessories (at most one per body place, up to three in cold weather), and outfits have distinct item sets.
 
 #### Scenario: Not enough clothes
 - GIVEN the user has no shoes for the occasion

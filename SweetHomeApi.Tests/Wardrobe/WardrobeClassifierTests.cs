@@ -122,6 +122,15 @@ public class WardrobeClassifierTests
     [InlineData("Кэмел пальто", WardrobeCategory.OUTERWEAR, "BEIGE")]
     [InlineData("Charcoal trousers", WardrobeCategory.BOTTOM, "GRAY")]
     [InlineData("Lavender blouse", WardrobeCategory.TOP, "PURPLE")]
+    [InlineData("Топы", WardrobeCategory.TOP, null)]
+    [InlineData("Кроксы", WardrobeCategory.SHOES, null)]
+    [InlineData("Броги коричневые", WardrobeCategory.SHOES, "BROWN")]
+    [InlineData("Ботфорты", WardrobeCategory.SHOES, null)]
+    [InlineData("Мартинсы", WardrobeCategory.SHOES, null)]
+    [InlineData("Палантин", WardrobeCategory.ACCESSORY, null)]
+    [InlineData("Платье в цветочек", WardrobeCategory.DRESS, "MULTI")]
+    [InlineData("Khaki chinos", WardrobeCategory.BOTTOM, "BEIGE")]
+    [InlineData("Худи Off-White", WardrobeCategory.TOP, null)]
     public void ClassifiesCommonItems(string name, WardrobeCategory category, string? color)
     {
         var result = WardrobeClassifier.Classify(name);
@@ -202,10 +211,44 @@ public class WardrobeClassifierTests
         Assert.Equal(["BLACK"], WardrobeClassifier.Classify("Чёрные брюки", "носить с белой рубашкой").Colors);
     }
 
-    [Fact]
-    public void NotesAreUsedWhenNameIsUnknown()
+    [Theory]
+    [InlineData("Levi's 501", "к белой футболке")]
+    [InlineData("Mango", "под пальто")]
+    public void Notes_NeverDecideCategory(string name, string notes)
     {
-        Assert.Equal(WardrobeCategory.TOP, WardrobeClassifier.Classify("Подарок мамы", "тёплый свитер").Category);
+        Assert.Null(WardrobeClassifier.Classify(name, notes).Category);
+    }
+
+    [Fact]
+    public void Notes_DoNotChangeWarmthOrSeasons()
+    {
+        var result = WardrobeClassifier.Classify("Футболка", "ношу под тёплый свитер зимой");
+
+        Assert.Equal(1, result.Warmth);
+        Assert.DoesNotContain("WINTER", result.Seasons);
+    }
+
+    [Theory]
+    [InlineData("Резиновые сапоги", 3)]
+    [InlineData("Rain jacket", 3)]
+    [InlineData("Демисезонные сапоги", 4)]
+    public void RainAndDemiSeasonItems_AreNotWinterWarm(string name, int maxWarmth)
+    {
+        var result = WardrobeClassifier.Classify(name);
+
+        Assert.True(result.Warmth <= maxWarmth, $"{name}: {result.Warmth}");
+        Assert.DoesNotContain("WINTER", result.Seasons);
+    }
+
+    [Theory]
+    [InlineData("Шапка вязаная", "head")]
+    [InlineData("Шарф", "neck")]
+    [InlineData("Перчатки кожаные", "hands")]
+    [InlineData("Рюкзак", "bag")]
+    [InlineData("Часы", "other")]
+    public void AccessoryKinds(string name, string kind)
+    {
+        Assert.Equal(kind, WardrobeClassifier.AccessoryKind(name));
     }
 
     [Fact]
@@ -297,6 +340,10 @@ public class WardrobeClassifierTests
     [InlineData("#614051", "PURPLE")]
     [InlineData("#FDFD96", "YELLOW")]
     [InlineData("#9CAF88", "GREEN")]
+    [InlineData("#141B2D", "NAVY")]
+    [InlineData("#3E2723", "BROWN")]
+    [InlineData("#C8A2C8", "PURPLE")]
+    [InlineData("#E3D9C6", "BEIGE")]
     public void NearestColor_MapsPhotoColors(string hex, string expected)
     {
         Assert.True(WardrobeClassifier.TryParseHex(hex, out var rgb));

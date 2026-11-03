@@ -14,11 +14,12 @@ public class WardrobeRepository(SweetHomeDbContext context) : IWardrobeRepositor
 
         if (!string.IsNullOrWhiteSpace(query.Query))
         {
-            var search = $"%{EscapeLike(query.Query.Trim())}%";
+            // «ё» и «е» считаем одной буквой: «черн» находит «Чёрные брюки».
+            var search = $"%{EscapeLike(FoldYo(query.Query.Trim()))}%";
             items = items.Where(x =>
-                EF.Functions.ILike(x.Name, search, "\\")
-                || (x.Brand != null && EF.Functions.ILike(x.Brand, search, "\\"))
-                || (x.Notes != null && EF.Functions.ILike(x.Notes, search, "\\")));
+                EF.Functions.ILike(x.Name.Replace("ё", "е").Replace("Ё", "Е"), search, "\\")
+                || (x.Brand != null && EF.Functions.ILike(x.Brand.Replace("ё", "е").Replace("Ё", "Е"), search, "\\"))
+                || (x.Notes != null && EF.Functions.ILike(x.Notes.Replace("ё", "е").Replace("Ё", "Е"), search, "\\")));
         }
 
         if (query.Category.HasValue)
@@ -114,9 +115,10 @@ public class WardrobeRepository(SweetHomeDbContext context) : IWardrobeRepositor
         await context.SaveChangesAsync();
     }
 
-    public async Task UpdateItemAsync(WardrobeItem item)
+    public Task<bool> UpdateItemAsync(WardrobeItem item)
     {
-        await context.SaveChangesAsync();
+        // Вещь могли удалить параллельно: тогда это 404, а не 500.
+        return SaveIgnoringMissingRowsAsync();
     }
 
     public async Task DeleteItemAsync(WardrobeItem item)
@@ -163,15 +165,18 @@ public class WardrobeRepository(SweetHomeDbContext context) : IWardrobeRepositor
         var utcNow = DateTime.UtcNow;
         var now = new DateTime(utcNow.Ticks - utcNow.Ticks % 10, DateTimeKind.Utc);
 
-        // Upsert одной командой: две одновременные первые загрузки не падают на первичном ключе.
+        await using var transaction = await context.Database.BeginTransactionAsync();
+        await LockItemImageAsync(item.Id);
+
         try
         {
+            // Upsert одной командой: две одновременные первые загрузки не падают на первичном ключе.
             await context.Database.ExecuteSqlInterpolatedAsync($"""
-            INSERT INTO "WardrobeItemImages" ("ItemId", "Data", "ContentType", "UpdatedAt")
-            VALUES ({item.Id}, {data}, {contentType}, {now})
-            ON CONFLICT ("ItemId") DO UPDATE
-            SET "Data" = EXCLUDED."Data", "ContentType" = EXCLUDED."ContentType", "UpdatedAt" = EXCLUDED."UpdatedAt"
-            """);
+                INSERT INTO "WardrobeItemImages" ("ItemId", "Data", "ContentType", "UpdatedAt")
+                VALUES ({item.Id}, {data}, {contentType}, {now})
+                ON CONFLICT ("ItemId") DO UPDATE
+                SET "Data" = EXCLUDED."Data", "ContentType" = EXCLUDED."ContentType", "UpdatedAt" = EXCLUDED."UpdatedAt"
+                """);
         }
         catch (PostgresException ex) when (ex.SqlState == PostgresErrorCodes.ForeignKeyViolation)
         {
@@ -179,24 +184,49 @@ public class WardrobeRepository(SweetHomeDbContext context) : IWardrobeRepositor
             return false;
         }
 
+        // Флаги обновляем тем же SQL-путём под той же блокировкой: фото и HasImage меняются согласованно.
+        var updated = await context.WardrobeItems
+            .Where(x => x.Id == item.Id)
+            .ExecuteUpdateAsync(setters => setters
+                .SetProperty(x => x.HasImage, true)
+                .SetProperty(x => x.ImageUpdatedAt, now)
+                .SetProperty(x => x.UpdatedAt, now));
+        if (updated == 0)
+            return false;
+
+        await transaction.CommitAsync();
         item.HasImage = true;
         item.ImageUpdatedAt = now;
         item.UpdatedAt = now;
-
-        return await SaveIgnoringMissingRowsAsync();
+        return true;
     }
 
     public async Task DeleteImageAsync(WardrobeItem item)
     {
-        var image = await context.WardrobeItemImages.FirstOrDefaultAsync(x => x.ItemId == item.Id);
-        if (image is not null)
-            context.WardrobeItemImages.Remove(image);
+        var utcNow = DateTime.UtcNow;
+        var now = new DateTime(utcNow.Ticks - utcNow.Ticks % 10, DateTimeKind.Utc);
 
+        await using var transaction = await context.Database.BeginTransactionAsync();
+        await LockItemImageAsync(item.Id);
+
+        await context.WardrobeItemImages.Where(x => x.ItemId == item.Id).ExecuteDeleteAsync();
+        await context.WardrobeItems
+            .Where(x => x.Id == item.Id)
+            .ExecuteUpdateAsync(setters => setters
+                .SetProperty(x => x.HasImage, false)
+                .SetProperty(x => x.ImageUpdatedAt, (DateTime?)null)
+                .SetProperty(x => x.UpdatedAt, now));
+
+        await transaction.CommitAsync();
         item.HasImage = false;
         item.ImageUpdatedAt = null;
-        item.UpdatedAt = DateTime.UtcNow;
+        item.UpdatedAt = now;
+    }
 
-        await SaveIgnoringMissingRowsAsync();
+    /// <summary>Сериализует загрузку и удаление фото одной вещи.</summary>
+    private Task LockItemImageAsync(string itemId)
+    {
+        return context.Database.ExecuteSqlInterpolatedAsync($"SELECT pg_advisory_xact_lock(hashtext({"wardrobe-image:" + itemId}))");
     }
 
     public Task<List<WardrobeOutfit>> GetOutfitsAsync(string userId)
@@ -284,6 +314,8 @@ public class WardrobeRepository(SweetHomeDbContext context) : IWardrobeRepositor
             return false;
         }
     }
+
+    private static string FoldYo(string value) => value.Replace('ё', 'е').Replace('Ё', 'Е');
 
     private static string EscapeLike(string value)
     {

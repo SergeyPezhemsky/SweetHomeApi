@@ -61,13 +61,15 @@ public static class WardrobeClassifier
         // Верх
         new(["футболк", "футболоч", "t-shirt", "tshirt", "tee"], WardrobeCategory.TOP, 1, Warm, [Casual, Sport, Home]),
         new(["майка", "майки", "майку", "маек", "маечка", "маечки", "tank"], WardrobeCategory.TOP, 1, [Summer], [Casual, Sport, Home], ExactOnly: true),
-        new(["топ", "топик", "top"], WardrobeCategory.TOP, 1, [Summer], [Casual], ExactOnly: true),
+        new(["топ", "топы", "топик", "топики", "top"], WardrobeCategory.TOP, 1, [Summer], [Casual], ExactOnly: true),
         new(["рубаш", "сорочк", "shirt"], WardrobeCategory.TOP, 2, AllSeasons, [Office, Casual, Formal]),
         new(["блуз", "blouse"], WardrobeCategory.TOP, 2, AllSeasons, [Office, Casual, Formal]),
         new(["поло", "polo"], WardrobeCategory.TOP, 2, Warm, [Casual, Sport], ExactOnly: true),
         new(["лонгслив", "longsleeve", "тельняшк", "боди", "bodysuit"], WardrobeCategory.TOP, 2, AllSeasons, [Casual, Home]),
-        new(["водолазк", "бадлон", "гольф", "turtleneck"], WardrobeCategory.TOP, 3, Cold, [Casual, Office]),
+        new(["водолазк", "бадлон", "turtleneck"], WardrobeCategory.TOP, 3, Cold, [Casual, Office]),
         new(["свитер", "sweater"], WardrobeCategory.TOP, 4, Cold, [Casual]),
+        new(["гольф"], WardrobeCategory.TOP, 3, Cold, [Casual, Office], ExactOnly: true),
+        new(["пижам", "pajama", "домашний костюм"], WardrobeCategory.TOP, 2, AllSeasons, [Home]),
         new(["джемпер", "jumper", "пуловер", "pullover"], WardrobeCategory.TOP, 3, [Spring, Autumn, Winter], [Casual, Office]),
         new(["кофт", "кардиган", "cardigan"], WardrobeCategory.TOP, 3, [Spring, Autumn, Winter], [Casual, Office, Home]),
         new(["худи", "hoodie", "толстовк", "свитшот", "sweatshirt", "олимпийк"], WardrobeCategory.TOP, 3, [Spring, Autumn, Winter], [Casual, Sport, Home]),
@@ -99,16 +101,16 @@ public static class WardrobeClassifier
         // Обувь
         new(["кроссовк", "кроссовоч", "кроссы", "слипон", "sneaker", "trainer", "runner", "slip-on", "shoe"], WardrobeCategory.SHOES, 2, [Spring, Summer, Autumn], [Casual, Sport]),
         new(["кеды", "кед", "кедики", "converse"], WardrobeCategory.SHOES, 2, Warm, [Casual], ExactOnly: true),
-        new(["ботин", "полусапож", "ботильон", "boot", "челси", "chelsea", "берц", "тимберленд"], WardrobeCategory.SHOES, 4, [Spring, Autumn, Winter], [Casual]),
-        new(["сапог", "сапож", "валенк", "угги", "ugg", "дутик"], WardrobeCategory.SHOES, 5, [Winter], [Casual]),
-        new(["туфл", "туфельк", "лодочк", "шпильк", "heels", "heel", "pumps", "oxford", "оксфорд", "дерби", "derby", "dress shoe"], WardrobeCategory.SHOES, 2, [Spring, Summer, Autumn], [Office, Formal]),
+        new(["ботин", "полусапож", "ботильон", "boot", "челси", "chelsea", "берц", "тимберленд", "мартинс", "martens", "казаки"], WardrobeCategory.SHOES, 4, [Spring, Autumn, Winter], [Casual, Office]),
+        new(["сапог", "сапож", "ботфорт", "валенк", "угги", "ugg", "дутик"], WardrobeCategory.SHOES, 5, [Winter], [Casual, Office]),
+        new(["туфл", "туфельк", "лодочк", "шпильк", "heels", "heel", "pumps", "oxford", "оксфорд", "дерби", "derby", "броги", "brogue", "dress shoe"], WardrobeCategory.SHOES, 2, [Spring, Summer, Autumn], [Office, Formal]),
         new(["лофер", "loafer", "мокасин", "moccasin", "балетк", "ballet", "мюли", "сабо", "mules", "clogs"], WardrobeCategory.SHOES, 2, [Spring, Summer, Autumn], [Casual, Office]),
         new(["босонож", "сандал", "sandal", "шлеп", "сланц", "flip-flop", "flip flop", "вьетнамк", "эспадрил", "espadrille"], WardrobeCategory.SHOES, 1, [Summer], [Casual]),
-        new(["тапк", "тапоч", "slipper"], WardrobeCategory.SHOES, 1, AllSeasons, [Home]),
+        new(["тапк", "тапоч", "кроксы", "crocs", "slipper"], WardrobeCategory.SHOES, 1, AllSeasons, [Home]),
 
         // Аксессуары
         new(["шапк", "шапоч", "beanie", "ушанк"], WardrobeCategory.ACCESSORY, 4, [Winter], [Casual]),
-        new(["шарф", "снуд", "scarf"], WardrobeCategory.ACCESSORY, 4, Cold, [Casual, Office]),
+        new(["шарф", "снуд", "палантин", "scarf"], WardrobeCategory.ACCESSORY, 4, Cold, [Casual, Office]),
         new(["перчат", "варежк", "gloves", "mittens"], WardrobeCategory.ACCESSORY, 4, [Winter], [Casual, Office]),
         new(["кепк", "кепоч", "бейсболк", "панам", "cap", "панама"], WardrobeCategory.ACCESSORY, 1, [Summer], [Casual, Sport]),
         new(["шляп", "hat", "берет", "beret"], WardrobeCategory.ACCESSORY, 2, AllSeasons, [Casual]),
@@ -125,6 +127,9 @@ public static class WardrobeClassifier
         // Флис, деним и кожа греют меньше пуховика: такая верхняя одежда — межсезонная.
         new(["флис", "fleece"], WarmthDelta: 1, Seasons: Cold, OuterwearCap: 3),
         new(["джинсов", "denim", "деним", "кожан", "кожзам", "leather", "замш", "suede"], OuterwearCap: 3),
+        // Резиновые сапоги и дождевики — от дождя, а не от мороза.
+        new(["резинов", "rain", "непромока"], OuterwearCap: 3),
+        new(["демисезон"], Seasons: Demi, OuterwearCap: 4),
         new(["зимн", "winter"], WarmthDelta: 1, Seasons: [Winter]),
         new(["пухов"], WarmthDelta: 1, Seasons: [Winter]),
         new(["летн", "summer"], WarmthDelta: -1, Seasons: [Summer]),
@@ -132,7 +137,6 @@ public static class WardrobeClassifier
         new(["льнян", "linen", "шелк", "silk", "сетк"], WarmthDelta: -1, Seasons: Warm, SkipForAccessories: true),
         new(["лен"], WarmthDelta: -1, Seasons: Warm, ExactOnly: true, SkipForAccessories: true),
         new(["карго", "cargo"], Styles: [Casual]),
-        new(["демисезон"], Seasons: Demi),
         new(["осенн", "autumn", "fall"], Seasons: [Autumn]),
         new(["весенн", "spring"], Seasons: [Spring]),
         new(["спорт", "sport", "sports", "athletic", "трениров", "беговы", "running", "фитнес", "gym", "йог", "yoga"], Styles: [Sport]),
@@ -148,19 +152,19 @@ public static class WardrobeClassifier
         new(["бел", "white", "молочн", "кремов", "ivory", "cream"], "WHITE", Excludes: ["бель", "белорус"]),
         new(["сер", "gray", "grey", "charcoal", "графит", "антрацит"], "GRAY", Excludes: ["серьг", "сереж", "серд", "серебр", "серия", "серии"]),
         new(["серебр", "silver"], "GRAY"),
-        new(["беж", "beige", "песочн", "камел", "кэмел", "camel", "tan", "тауп", "taupe", "sand"], "BEIGE"),
+        new(["беж", "beige", "khaki", "песочн", "камел", "кэмел", "camel", "tan", "тауп", "taupe", "sand"], "BEIGE"),
         new(["коричн", "brown", "шоколад", "кофейн", "терракот"], "BROWN"),
         new(["голуб", "lightblue", "бирюз", "turquoise", "aqua"], "LIGHT_BLUE"),
         new(["син", "blue", "джинсов", "джинсик", "denim", "деним"], "BLUE", Excludes: ["синтет", "синтеп"]),
         new(["бордов", "бордо", "винн", "burgundy", "maroon", "wine", "марсал"], "BURGUNDY"),
         new(["красн", "red", "алый"], "RED"),
-        new(["розов", "pink", "пудров", "фукси"], "PINK"),
+        new(["розов", "pink", "пудров", "фукси", "малинов", "персиков", "peach"], "PINK"),
         new(["оранж", "orange", "морков", "коралл", "coral", "rust", "ржав"], "ORANGE"),
-        new(["желт", "yellow", "горчичн", "mustard", "лимонн"], "YELLOW"),
-        new(["оливк", "olive", "хаки", "khaki", "милитари"], "OLIVE"),
+        new(["желт", "yellow", "горчичн", "mustard", "лимонн", "золотист", "gold", "golden"], "YELLOW"),
+        new(["оливк", "olive", "хаки", "милитари"], "OLIVE"),
         new(["зелен", "green", "изумруд", "мятн", "mint", "teal", "салатов"], "GREEN"),
         new(["фиолет", "purple", "violet", "сиренев", "лилов", "lilac", "лаванд", "lavender"], "PURPLE"),
-        new(["принт", "print", "printed", "цветочн", "floral", "клетк", "клетчат", "plaid", "checked", "полоск", "striped", "stripe", "пестр", "разноцвет", "multicolor", "multicolored", "камуфляж", "camo", "tiedye", "горош", "polkadot"], "MULTI")
+        new(["принт", "print", "printed", "цветочн", "цветоч", "floral", "леопард", "leopard", "клетк", "клетчат", "plaid", "checked", "полоск", "striped", "stripe", "пестр", "разноцвет", "multicolor", "multicolored", "камуфляж", "camo", "tiedye", "горош", "polkadot"], "MULTI")
     ];
 
     private static readonly (string From, string To)[] CompoundReplacements =
@@ -169,6 +173,11 @@ public static class WardrobeClassifier
         ("темно син", "темносин"),
         ("dark blue", "navy"),
         ("navy blue", "navy"),
+        ("baby blue", "lightblue"),
+        ("off-white", "offwhite"),
+        ("off white", "offwhite"),
+        ("black star", "blackstar"),
+        ("red wing", "redwing"),
         ("light blue", "lightblue"),
         ("light-blue", "lightblue"),
         ("sky blue", "lightblue"),
@@ -205,6 +214,8 @@ public static class WardrobeClassifier
         ("BROWN", "#8B5A2B"), ("BROWN", "#5C4033"), ("BROWN", "#A0522D"),
         ("GRAY", "#36454F"), ("GRAY", "#708090"), ("GRAY", "#A9A9A9"), ("GRAY", "#D3D3D3"),
         ("BEIGE", "#C3B091"), ("BEIGE", "#C2B280"), ("OLIVE", "#4B5320"), ("GREEN", "#9CAF88"),
+        ("NAVY", "#141B2D"), ("NAVY", "#262D3D"), ("BROWN", "#3E2723"), ("BEIGE", "#ADA587"), ("OLIVE", "#8A865D"),
+        ("PURPLE", "#C8A2C8"), ("BEIGE", "#E3D9C6"),
         ("PURPLE", "#D8BFD8"), ("PURPLE", "#614051"), ("YELLOW", "#FDFD96")
     ];
 
@@ -214,16 +225,16 @@ public static class WardrobeClassifier
     public static WardrobeClassification Classify(string? name, string? notes = null, string? colorHex = null)
     {
         // Название главнее заметок: «White sneakers» с заметкой «к белой футболке» — это обувь, а не футболка.
+        // Заметки в классификации не участвуют: в них обычно пишут про другие вещи
+        // («ношу под тёплый свитер», «к белой футболке»), и они искажали бы категорию, цвет и теплоту.
         var nameText = Normalize(name ?? string.Empty);
         var nameTokens = Tokenize(nameText);
-        var notesText = Normalize(notes ?? string.Empty);
-        var text = Normalize($"{name} {notes}");
-        var tokens = Tokenize(text);
+        var text = nameText;
+        var tokens = nameTokens;
         var result = new WardrobeClassification();
         var matched = new List<string>();
 
-        var categoryRule = FindCategoryRule(nameTokens, nameText, matched)
-                           ?? FindCategoryRule(Tokenize(notesText), notesText, matched);
+        var categoryRule = FindCategoryRule(nameTokens, nameText, matched);
         var seasons = new HashSet<string>(categoryRule?.Seasons ?? []);
         var styles = new HashSet<string>(categoryRule?.Styles ?? []);
         var explicitSeasons = new HashSet<string>();
@@ -256,13 +267,18 @@ public static class WardrobeClassifier
             seasons = explicitSeasons;
 
         // Джинсовка, кожанка, флисовая куртка: не теплее «средней», носятся в межсезонье.
-        if (categoryRule?.Category == WardrobeCategory.OUTERWEAR && outerwearCap is { } outerCap)
+        if (categoryRule?.Category is WardrobeCategory.OUTERWEAR or WardrobeCategory.SHOES && outerwearCap is { } outerCap)
         {
             warmth = Math.Min(warmth, outerCap);
             seasons = [..Demi];
         }
 
-        if (explicitStyles.Count > 0)
+        // «Домашние штаны», «домашняя футболка» — только для дома, не для улицы.
+        if (explicitStyles.SetEquals([Home]))
+        {
+            styles = [Home];
+        }
+        else if (explicitStyles.Count > 0)
         {
             // Явно названный стиль ставим первым, остальные стили категории оставляем как совместимые.
             styles = [..explicitStyles, ..styles.Where(x => !explicitStyles.Contains(x) && x != Home)];
@@ -315,6 +331,35 @@ public static class WardrobeClassifier
         result.MatchedKeywords = matched.Distinct().ToList();
         result.Confidence = Math.Round(Math.Min(0.95, 0.6 + 0.1 * signals), 2);
         return result;
+    }
+
+    /// <summary>«Место» аксессуара: в образе не больше одного на место (не две шапки, не шарф и палантин).</summary>
+    public static string AccessoryKind(string? name)
+    {
+        var tokens = Tokenize(Normalize(name ?? string.Empty));
+        bool Has(params string[] stems) => tokens.Any(t => stems.Any(stem =>
+            IsCyrillic(stem) ? t.StartsWith(stem, StringComparison.Ordinal) : MatchesLatin(t, stem)));
+
+        if (Has("шапк", "шапоч", "ушанк", "кепк", "кепоч", "бейсболк", "панам", "шляп", "берет", "beanie", "hat", "cap", "beret"))
+            return "head";
+        if (Has("шарф", "снуд", "палантин", "платок", "галстук", "бабочк", "scarf", "tie", "bowtie", "necktie"))
+            return "neck";
+        if (Has("перчат", "варежк", "gloves", "glove", "mittens"))
+            return "hands";
+        if (Has("сумк", "сумоч", "рюкзак", "рюкзач", "клатч", "bag", "handbag", "tote", "backpack", "clutch"))
+            return "bag";
+        if (Has("ремень", "ремн", "пояс", "belt"))
+            return "waist";
+        return "other";
+    }
+
+    /// <summary>Рубашка или сорочка — к ним уместен галстук.</summary>
+    public static bool IsShirt(string? name)
+    {
+        var tokens = Tokenize(Normalize(name ?? string.Empty));
+        return tokens.Any(t => t.StartsWith("рубаш", StringComparison.Ordinal)
+                               || t.StartsWith("сорочк", StringComparison.Ordinal)
+                               || MatchesLatin(t, "shirt"));
     }
 
     /// <summary>Галстук или бабочка — уместны только с рубашкой, не с платьем.</summary>

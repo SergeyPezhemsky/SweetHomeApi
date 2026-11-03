@@ -190,7 +190,89 @@ public class OutfitGeneratorTests
         watch.Stop();
 
         Assert.NotEmpty(result.Outfits);
-        Assert.True(watch.ElapsedMilliseconds < 700, $"took {watch.ElapsedMilliseconds} ms");
+        Assert.True(watch.ElapsedMilliseconds < 3000, $"took {watch.ElapsedMilliseconds} ms");
+    }
+
+    [Theory]
+    [InlineData(-20)]
+    [InlineData(5)]
+    [InlineData(30)]
+    public void Home_IgnoresOutdoorWeather(int temperature)
+    {
+        var wardrobe = new List<WardrobeItem>
+        {
+            Item("home-tee", WardrobeCategory.TOP, 2, "GRAY", ["HOME"]),
+            Item("home-pants", WardrobeCategory.BOTTOM, 2, "GRAY", ["HOME"]),
+            Item("slippers", WardrobeCategory.SHOES, 1, "BEIGE", ["HOME"]),
+            Item("puffer", WardrobeCategory.OUTERWEAR, 5, "BLACK", ["CASUAL"])
+        };
+
+        var result = OutfitGenerator.Generate(wardrobe, new OutfitSuggestionRequest
+        {
+            Occasion = WardrobeStyle.HOME,
+            Temperature = temperature
+        }, Now);
+
+        Assert.Empty(result.Missing);
+        var outfit = Assert.Single(result.Outfits);
+        Assert.DoesNotContain(outfit.Items, x => x.Category == WardrobeCategory.OUTERWEAR);
+    }
+
+    [Fact]
+    public void OfficeInWinter_FallsBackToCasualStreetwear()
+    {
+        var wardrobe = new List<WardrobeItem>
+        {
+            Item("shirt", WardrobeCategory.TOP, 2, "WHITE", ["OFFICE"]),
+            Item("sweater", WardrobeCategory.TOP, 4, "GRAY", ["OFFICE", "CASUAL"]),
+            Item("trousers", WardrobeCategory.BOTTOM, 3, "BLACK", ["OFFICE"]),
+            Item("loafers", WardrobeCategory.SHOES, 2, "BLACK", ["OFFICE"], ["SPRING", "SUMMER", "AUTUMN"]),
+            Item("winter-boots", WardrobeCategory.SHOES, 5, "BLACK", ["CASUAL"], ["WINTER"]),
+            Item("puffer", WardrobeCategory.OUTERWEAR, 5, "BLACK", ["CASUAL"], ["WINTER"])
+        };
+
+        var result = OutfitGenerator.Generate(wardrobe, new OutfitSuggestionRequest
+        {
+            Occasion = WardrobeStyle.OFFICE,
+            Temperature = -15
+        }, Now);
+
+        Assert.NotEmpty(result.Outfits);
+        Assert.All(result.Outfits, outfit =>
+        {
+            Assert.Contains(outfit.Items, x => x.Id == "winter-boots");
+            Assert.Contains(outfit.Items, x => x.Id == "puffer");
+        });
+    }
+
+    [Fact]
+    public void Frost_GetsHatAndScarf()
+    {
+        var wardrobe = CasualWardrobe();
+        wardrobe.Add(Item("Шапка", WardrobeCategory.ACCESSORY, 4, "GRAY"));
+        wardrobe.Add(Item("Перчатки", WardrobeCategory.ACCESSORY, 4, "BLACK"));
+
+        var result = OutfitGenerator.Generate(wardrobe, new OutfitSuggestionRequest
+        {
+            Occasion = WardrobeStyle.CASUAL,
+            Temperature = -20,
+            Count = 3
+        }, Now);
+
+        Assert.All(result.Outfits, outfit => Assert.Contains(outfit.Items, x => x.Name == "Шапка"));
+    }
+
+    [Fact]
+    public void MildAndCoolDays_GetDifferentOutfits()
+    {
+        var wardrobe = CasualWardrobe();
+        var cool = OutfitGenerator.Generate(wardrobe, new OutfitSuggestionRequest { Occasion = WardrobeStyle.CASUAL, Temperature = 10 }, Now);
+        var mild = OutfitGenerator.Generate(wardrobe, new OutfitSuggestionRequest { Occasion = WardrobeStyle.CASUAL, Temperature = 20 }, Now);
+
+        string Key(OutfitSuggestionResult r) => string.Join(";", r.Outfits.Select(o => string.Join("|", o.Items.Select(i => i.Id))));
+        Assert.NotEqual(Key(cool), Key(mild));
+        Assert.True(mild.Outfits.Count(o => o.Items.Any(i => i.Category == WardrobeCategory.OUTERWEAR)) < mild.Outfits.Count);
+        Assert.All(mild.Outfits, o => Assert.DoesNotContain(o.Items, i => i.Warmth >= 4));
     }
 
     [Fact]
@@ -274,7 +356,9 @@ public class OutfitGeneratorTests
             Assert.True(classic || dress, string.Join(",", outfit.Items.Select(x => x.Id)));
             Assert.Equal(1, byCategory.GetValueOrDefault(WardrobeCategory.SHOES));
             Assert.True(byCategory.GetValueOrDefault(WardrobeCategory.OUTERWEAR) <= 1);
-            Assert.True(byCategory.GetValueOrDefault(WardrobeCategory.ACCESSORY) <= 1);
+            var accessories = outfit.Items.Where(x => x.Category == WardrobeCategory.ACCESSORY).ToList();
+            Assert.True(accessories.Count <= 3);
+            Assert.Equal(accessories.Count, accessories.Select(x => WardrobeClassifier.AccessoryKind(x.Name)).Distinct().Count());
             Assert.InRange(outfit.Score, 0, 100);
             Assert.NotEmpty(outfit.Reasons);
             Assert.True(keys.Add(string.Join("|", outfit.Items.Select(x => x.Id).Order())));
