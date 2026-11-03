@@ -158,7 +158,10 @@ public class WardrobeRepository(SweetHomeDbContext context) : IWardrobeRepositor
 
     public async Task<bool> SetImageAsync(WardrobeItem item, byte[] data, string contentType)
     {
-        var now = DateTime.UtcNow;
+        // PostgreSQL хранит время с точностью до микросекунд: обрезаем заранее, чтобы ответ на загрузку
+        // и последующие чтения отдавали одинаковый imageUpdatedAt (по нему клиент кэширует фото).
+        var utcNow = DateTime.UtcNow;
+        var now = new DateTime(utcNow.Ticks - utcNow.Ticks % 10, DateTimeKind.Utc);
 
         // Upsert одной командой: две одновременные первые загрузки не падают на первичном ключе.
         try
