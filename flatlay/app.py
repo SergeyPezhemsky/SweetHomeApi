@@ -76,7 +76,7 @@ def _decode(data: bytes):
     except Exception as exc:  # noqa: BLE001 — любой мусор вместо картинки
         raise HTTPException(status_code=400, detail="not an image") from exc
 
-    # Сегментации не нужно больше 2048 px: быстрее и меньше памяти.
+    # Сегментации не нужно больше MAX_SIDE px: быстрее и меньше памяти.
     scale = min(1.0, MAX_SIDE / max(im.size))
     if scale < 1:
         im = im.resize((round(im.width * scale), round(im.height * scale)), Image.LANCZOS)
@@ -88,23 +88,30 @@ def _nothing_found(reason: str) -> HTTPException:
     return HTTPException(status_code=422, detail={"code": "NOTHING_FOUND", "reason": reason})
 
 
+def _trim():
+    if _libc is not None:
+        # Крупные буферы numpy/OpenCV glibc иначе держит у процесса — память не возвращается системе.
+        _libc.malloc_trim(0)
+
+
 def process_bytes(data: bytes) -> bytes:
     with _lock:
-        img = _decode(data)
-        alpha = flatlay.segment(img, MODEL)
         try:
-            mask = flatlay.clean_mask(alpha)
-        except RuntimeError as exc:
-            raise _nothing_found(str(exc)) from exc
-        if not mask.any():
-            raise _nothing_found("empty mask")
-        img = flatlay.white_balance(img, mask)
-        out = flatlay.compose(img, mask, _bg_bgr(BG_HEX), RATIO, SIZE, True, MARGIN)
-        ok, buf = cv2.imencode(".jpg", out, [cv2.IMWRITE_JPEG_QUALITY, 90])
-        del img, alpha, mask, out
-        if _libc is not None:
-            # Крупные буферы numpy/OpenCV glibc иначе держит у процесса — память не возвращается системе.
-            _libc.malloc_trim(0)
+            img = _decode(data)
+            alpha = flatlay.segment(img, MODEL)
+            try:
+                mask = flatlay.clean_mask(alpha)
+            except RuntimeError as exc:
+                raise _nothing_found(str(exc)) from exc
+            if not mask.any():
+                raise _nothing_found("empty mask")
+            img = flatlay.white_balance(img, mask)
+            out = flatlay.compose(img, mask, _bg_bgr(BG_HEX), RATIO, SIZE, True, MARGIN)
+            ok, buf = cv2.imencode(".jpg", out, [cv2.IMWRITE_JPEG_QUALITY, 90])
+            del out
+        finally:
+            img = alpha = mask = None
+            _trim()
     if not ok:
         raise HTTPException(status_code=500, detail="encode failed")
     return buf.tobytes()
@@ -116,6 +123,7 @@ def warm_up():
     with _lock:
         _create_session()
         flatlay.segment(np.full((64, 64, 3), 255, np.uint8), MODEL)
+        _trim()
 
 
 @app.get("/health")

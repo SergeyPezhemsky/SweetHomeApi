@@ -289,11 +289,11 @@ public class WardrobeRepository(SweetHomeDbContext context) : IWardrobeRepositor
         if (current is null)
             return false;
 
-        // Уже в очереди — повторный клик не запускает ещё одну обработку того же фото.
-        if (current == WardrobeImageStatus.PENDING)
+        // Уже в очереди или уже готово — ничего не меняем: повторный клик не запускает лишнюю обработку,
+        // а готовая версия без фона не теряется, если новая попытка вдруг не удастся.
+        if (current is WardrobeImageStatus.PENDING or WardrobeImageStatus.READY)
         {
             await transaction.CommitAsync();
-            item.ImageStatus = WardrobeImageStatus.PENDING;
             return true;
         }
 

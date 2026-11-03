@@ -319,7 +319,7 @@ public class WardrobeFlatlayTests
         {
             if (!Images.TryGetValue(item.Id, out var image))
                 return Task.FromResult(false);
-            if (image.ProcessingStatus == WardrobeImageStatus.PENDING)
+            if (image.ProcessingStatus is WardrobeImageStatus.PENDING or WardrobeImageStatus.READY)
                 return Task.FromResult(true);
 
             image.Revision = ++_revisionSequence;

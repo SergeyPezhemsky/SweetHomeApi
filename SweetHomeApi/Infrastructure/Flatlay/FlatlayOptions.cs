@@ -8,7 +8,7 @@ public class FlatlayOptions
     public int TimeoutSeconds { get; set; } = 180;
 
     /// <summary>Сколько раз повторить запрос, если сервис ещё не поднялся или недоступен.</summary>
-    public int ConnectRetries { get; set; } = 3;
+    public int ConnectRetries { get; set; } = 9;
 
     public int RetryDelaySeconds { get; set; } = 10;
 }
