@@ -72,9 +72,9 @@ public static class WardrobeClassifier
 
         // Низ
         new(["джинсы", "джинс", "jeans"], WardrobeCategory.BOTTOM, 2, AllSeasons, [Casual], ExactOnly: true),
-        new(["брюк", "trousers", "slacks"], WardrobeCategory.BOTTOM, 2, AllSeasons, [Office, Casual, Formal]),
+        new(["брюк", "trousers", "slacks", "dress pant"], WardrobeCategory.BOTTOM, 2, AllSeasons, [Office, Casual, Formal]),
         new(["штан", "pants", "карго", "cargo", "чинос", "chinos"], WardrobeCategory.BOTTOM, 2, AllSeasons, [Casual]),
-        new(["джоггер", "joggers", "треник"], WardrobeCategory.BOTTOM, 2, AllSeasons, [Casual, Sport, Home]),
+        new(["джоггер", "joggers", "jogger", "треник", "sweatpants", "trackpants", "tracksuit", "спортивный костюм"], WardrobeCategory.BOTTOM, 2, AllSeasons, [Casual, Sport, Home]),
         new(["шорт", "shorts"], WardrobeCategory.BOTTOM, 1, [Summer], [Casual, Sport, Home]),
         new(["юбк", "skirt"], WardrobeCategory.BOTTOM, 2, AllSeasons, [Casual, Office]),
         new(["легинс", "леггинс", "лосин", "leggings", "тайтс"], WardrobeCategory.BOTTOM, 2, AllSeasons, [Sport, Home, Casual]),
@@ -86,19 +86,19 @@ public static class WardrobeClassifier
 
         // Верхняя одежда
         new(["пуховик", "puffer", "down jacket", "дубленк", "шуб", "parka", "парка"], WardrobeCategory.OUTERWEAR, 5, [Winter], [Casual]),
-        new(["пальто", "coat", "полупальто"], WardrobeCategory.OUTERWEAR, 4, [Spring, Autumn, Winter], [Casual, Office, Formal]),
-        new(["куртк", "jacket", "анорак", "anorak"], WardrobeCategory.OUTERWEAR, 4, [Spring, Autumn, Winter], [Casual]),
+        new(["пальто", "coat", "overcoat", "peacoat", "topcoat", "полупальто"], WardrobeCategory.OUTERWEAR, 4, [Spring, Autumn, Winter], [Casual, Office, Formal]),
+        new(["куртк", "курточ", "jacket", "анорак", "anorak"], WardrobeCategory.OUTERWEAR, 4, [Spring, Autumn, Winter], [Casual]),
         new(["плащ", "тренч", "trench", "raincoat"], WardrobeCategory.OUTERWEAR, 3, Demi, [Casual, Office]),
         new(["бомбер", "bomber", "косух", "ветровк", "windbreaker"], WardrobeCategory.OUTERWEAR, 3, Demi, [Casual, Sport]),
-        new(["пиджак", "жакет", "блейзер", "blazer"], WardrobeCategory.OUTERWEAR, 2, [Spring, Summer, Autumn], [Office, Formal]),
+        new(["пиджак", "жакет", "блейзер", "blazer", "suit jacket", "sport coat"], WardrobeCategory.OUTERWEAR, 2, [Spring, Summer, Autumn], [Office, Formal]),
         new(["жилет", "vest"], WardrobeCategory.OUTERWEAR, 3, Demi, [Casual]),
 
         // Обувь
-        new(["кроссовк", "sneaker", "trainer", "runner"], WardrobeCategory.SHOES, 2, [Spring, Summer, Autumn], [Casual, Sport]),
+        new(["кроссовк", "sneaker", "trainer", "runner", "shoe"], WardrobeCategory.SHOES, 2, [Spring, Summer, Autumn], [Casual, Sport]),
         new(["кеды", "кед", "converse"], WardrobeCategory.SHOES, 2, Warm, [Casual], ExactOnly: true),
-        new(["ботин", "boot", "челси", "chelsea", "берц", "тимберленд"], WardrobeCategory.SHOES, 4, [Spring, Autumn, Winter], [Casual]),
-        new(["сапог", "угги", "ugg", "дутик"], WardrobeCategory.SHOES, 5, [Winter], [Casual]),
-        new(["туфл", "лодочк", "шпильк", "heels", "pumps", "oxford", "оксфорд", "дерби", "derby"], WardrobeCategory.SHOES, 2, [Spring, Summer, Autumn], [Office, Formal]),
+        new(["ботин", "полусапож", "ботильон", "boot", "челси", "chelsea", "берц", "тимберленд"], WardrobeCategory.SHOES, 4, [Spring, Autumn, Winter], [Casual]),
+        new(["сапог", "сапож", "угги", "ugg", "дутик"], WardrobeCategory.SHOES, 5, [Winter], [Casual]),
+        new(["туфл", "лодочк", "шпильк", "heels", "heel", "pumps", "oxford", "оксфорд", "дерби", "derby", "dress shoe"], WardrobeCategory.SHOES, 2, [Spring, Summer, Autumn], [Office, Formal]),
         new(["лофер", "loafer", "мокасин", "moccasin", "балетк", "ballet"], WardrobeCategory.SHOES, 2, [Spring, Summer, Autumn], [Casual, Office]),
         new(["босонож", "сандал", "sandal", "шлеп", "сланц", "flip-flop", "вьетнамк"], WardrobeCategory.SHOES, 1, [Summer], [Casual]),
         new(["тапк", "тапоч", "slipper"], WardrobeCategory.SHOES, 1, AllSeasons, [Home]),
@@ -111,14 +111,14 @@ public static class WardrobeClassifier
         new(["шляп", "hat", "берет", "beret"], WardrobeCategory.ACCESSORY, 2, AllSeasons, [Casual]),
         new(["галстук", "tie", "бабочк", "bowtie"], WardrobeCategory.ACCESSORY, 1, AllSeasons, [Office, Formal]),
         new(["ремень", "ремн", "пояс", "belt"], WardrobeCategory.ACCESSORY, 1, AllSeasons, [Casual, Office, Formal]),
-        new(["сумк", "рюкзак", "клатч", "bag", "backpack", "clutch"], WardrobeCategory.ACCESSORY, 1, AllSeasons, [Casual, Office]),
-        new(["очки", "sunglasses", "часы", "watch", "платок", "серьг", "колье", "браслет"], WardrobeCategory.ACCESSORY, 1, AllSeasons, [Casual, Office, Formal])
+        new(["сумк", "сумоч", "рюкзак", "клатч", "bag", "handbag", "tote", "backpack", "clutch"], WardrobeCategory.ACCESSORY, 1, AllSeasons, [Casual, Office]),
+        new(["очки", "sunglasses", "часы", "watch", "платок", "серьг", "сереж", "колье", "браслет", "earring", "necklace", "bracelet"], WardrobeCategory.ACCESSORY, 1, AllSeasons, [Casual, Office, Formal])
     ];
 
     private static readonly ModifierRule[] ModifierRules =
     [
-        new(["тепл", "утепл", "warm", "insulated", "thermal", "термо"], WarmthDelta: 1),
-        new(["шерст", "wool", "кашемир", "cashmere", "флис", "fleece", "мохер", "ангор", "вязан", "knit"], WarmthDelta: 1, Seasons: Cold),
+        new(["тепл", "утепл", "warm", "insulated", "thermal", "термо", "padded"], WarmthDelta: 1),
+        new(["шерст", "wool", "woolen", "woollen", "кашемир", "cashmere", "флис", "fleece", "мохер", "ангор", "вязан", "knit", "knitted"], WarmthDelta: 1, Seasons: Cold),
         new(["зимн", "winter"], WarmthDelta: 1, Seasons: [Winter]),
         new(["летн", "summer"], WarmthDelta: -1, Seasons: [Summer]),
         new(["легк", "тонк", "light", "thin"], WarmthDelta: -1),
@@ -127,7 +127,7 @@ public static class WardrobeClassifier
         new(["демисезон"], Seasons: Demi),
         new(["осенн", "autumn", "fall"], Seasons: [Autumn]),
         new(["весенн", "spring"], Seasons: [Spring]),
-        new(["спорт", "sport", "трениров", "беговы", "running", "фитнес", "gym", "йог", "yoga"], Styles: [Sport]),
+        new(["спорт", "sport", "sports", "athletic", "трениров", "беговы", "running", "фитнес", "gym", "йог", "yoga"], Styles: [Sport]),
         new(["офис", "делов", "office", "business", "классич", "classic"], Styles: [Office]),
         new(["вечерн", "праздн", "коктейл", "evening", "formal", "party", "нарядн"], Styles: [Formal]),
         new(["домашн", "home", "пижам", "pajama", "lounge"], Styles: [Home])
@@ -138,11 +138,11 @@ public static class WardrobeClassifier
         new(["темносин", "navy", "нэви", "индиго"], "NAVY"),
         new(["черн", "black"], "BLACK"),
         new(["бел", "white", "молочн", "кремов", "ivory", "cream"], "WHITE", Excludes: ["бель", "белорус"]),
-        new(["сер", "gray", "grey", "графит", "антрацит"], "GRAY", Excludes: ["серьг", "серд", "серебр", "серия", "серии"]),
+        new(["сер", "gray", "grey", "графит", "антрацит"], "GRAY", Excludes: ["серьг", "сереж", "серд", "серебр", "серия", "серии"]),
         new(["серебр", "silver"], "GRAY"),
         new(["беж", "beige", "песочн", "камел", "camel", "тауп"], "BEIGE"),
         new(["коричн", "brown", "шоколад", "кофейн", "терракот"], "BROWN"),
-        new(["голуб", "lightblue"], "LIGHT_BLUE"),
+        new(["голуб", "lightblue", "бирюз", "turquoise", "aqua"], "LIGHT_BLUE"),
         new(["син", "blue", "джинсов", "denim", "деним"], "BLUE", Excludes: ["синтет", "синтеп"]),
         new(["бордов", "винн", "burgundy", "maroon", "марсал"], "BURGUNDY"),
         new(["красн", "red", "алый"], "RED"),
@@ -152,7 +152,7 @@ public static class WardrobeClassifier
         new(["оливк", "olive", "хаки", "khaki", "милитари"], "OLIVE"),
         new(["зелен", "green", "изумруд", "мятн", "салатов"], "GREEN"),
         new(["фиолет", "purple", "violet", "сиренев", "лилов", "lilac", "лаванд"], "PURPLE"),
-        new(["принт", "print", "цветочн", "floral", "клетк", "клетчат", "plaid", "полоск", "striped", "пестр", "разноцвет", "камуфляж"], "MULTI")
+        new(["принт", "print", "printed", "цветочн", "floral", "клетк", "клетчат", "plaid", "checked", "полоск", "striped", "stripe", "пестр", "разноцвет", "multicolor", "multicolored", "камуфляж", "camo", "tiedye", "горош", "polkadot"], "MULTI")
     ];
 
     private static readonly (string From, string To)[] CompoundReplacements =
@@ -162,7 +162,11 @@ public static class WardrobeClassifier
         ("dark blue", "navy"),
         ("light blue", "lightblue"),
         ("light-blue", "lightblue"),
-        ("sky blue", "lightblue")
+        ("sky blue", "lightblue"),
+        ("tie-dye", "tiedye"),
+        ("tie dye", "tiedye"),
+        ("polka dot", "polkadot"),
+        ("polka-dot", "polkadot")
     ];
 
     private static readonly string[] AdjectiveEndings =
@@ -272,7 +276,10 @@ public static class WardrobeClassifier
 
         string best = "GRAY";
         var bestDistance = double.MaxValue;
-        foreach (var color in WardrobeDictionaries.Colors.Where(x => x.Code != "MULTI"))
+        // Явно цветной пиксель не сравниваем с ахроматическими (иначе «кэмел» становится серым).
+        var chromatic = max - min >= 48;
+        foreach (var color in WardrobeDictionaries.Colors.Where(x => x.Code != "MULTI"
+                     && !(chromatic && x.Code is "BLACK" or "WHITE" or "GRAY")))
         {
             TryParseHex(color.Hex, out var candidate);
             // «Красная» метрика: человеческий глаз по-разному чувствителен к каналам.
@@ -308,49 +315,57 @@ public static class WardrobeClassifier
         return true;
     }
 
+    /// <summary>
+    /// Ищет главное существительное: в русском обычно первое («платье-рубашка» — платье),
+    /// в английском — последнее («shirt dress» — платье, «dress shoes» — обувь).
+    /// </summary>
     private static CategoryRule? FindCategoryRule(List<string> tokens, string text, List<string> matched)
     {
-        CategoryRule? best = null;
-        var bestPosition = int.MaxValue;
-        string? bestToken = null;
+        var candidates = new List<(CategoryRule Rule, int Position, string Token, int Length, bool Cyrillic)>();
 
         foreach (var rule in CategoryRules)
         {
             foreach (var stem in rule.Stems)
             {
-                int position;
-                string? token;
-
-                if (stem.Contains(' ') || stem.Contains('-'))
+                if (IsPhrase(stem))
                 {
-                    position = text.IndexOf(stem, StringComparison.Ordinal);
-                    token = position >= 0 ? stem : null;
-                    if (token is not null)
-                        position = CountTokensBefore(text, position);
-                }
-                else
-                {
-                    position = tokens.FindIndex(t => MatchesNoun(t, stem, rule.ExactOnly));
-                    token = position >= 0 ? tokens[position] : null;
-                }
+                    var index = text.IndexOf(stem, StringComparison.Ordinal);
+                    if (index < 0)
+                        continue;
 
-                if (token is null || position >= bestPosition)
+                    // Позиция фразы — её последнее слово.
+                    var position = CountTokensBefore(text, index) + stem.Split([' ', '-'], StringSplitOptions.RemoveEmptyEntries).Length - 1;
+                    candidates.Add((rule, position, stem, stem.Length, IsCyrillic(stem)));
                     continue;
+                }
 
-                best = rule;
-                bestPosition = position;
-                bestToken = token;
+                for (var i = 0; i < tokens.Count; i++)
+                {
+                    if (MatchesNoun(tokens[i], stem, rule.ExactOnly))
+                        candidates.Add((rule, i, tokens[i], stem.Length, IsCyrillic(stem)));
+                }
             }
         }
 
-        if (bestToken is not null)
-            matched.Add(bestToken);
+        if (candidates.Count == 0)
+            return null;
 
-        return best;
+        var cyrillic = candidates.Where(x => x.Cyrillic).ToList();
+        var best = cyrillic.Count > 0
+            ? cyrillic.OrderBy(x => x.Position).ThenByDescending(x => x.Length).First()
+            : candidates.OrderByDescending(x => x.Position).ThenByDescending(x => x.Length).First();
+
+        matched.Add(best.Token);
+        return best.Rule;
     }
+
+    private static bool IsPhrase(string stem) => stem.Contains(' ') || stem.Contains('-');
 
     private static bool MatchesNoun(string token, string stem, bool exactOnly)
     {
+        if (!IsCyrillic(stem))
+            return MatchesLatin(token, stem);
+
         if (exactOnly)
             return token == stem;
 
@@ -358,25 +373,32 @@ public static class WardrobeClassifier
             return false;
 
         // Прилагательные («джинсовая», «рубашечный») не определяют категорию.
-        if (token.Length > stem.Length + 1 && IsCyrillic(token) && AdjectiveEndings.Any(token.EndsWith))
+        if (token.Length > stem.Length + 1 && AdjectiveEndings.Any(token.EndsWith))
             return false;
 
         return true;
+    }
+
+    /// <summary>Английские слова сравниваем целиком (с учётом множественного числа): «bag» ≠ «baggy», «boot» ≠ «bootcut».</summary>
+    private static bool MatchesLatin(string token, string stem)
+    {
+        return token == stem || token == stem + "s" || token == stem + "es";
     }
 
     private static string? FindMatch(List<string> tokens, string text, string[] stems, bool exactOnly, string[]? excludes)
     {
         foreach (var stem in stems)
         {
-            if (stem.Contains(' ') || stem.Contains('-'))
+            if (IsPhrase(stem))
             {
                 if (text.Contains(stem, StringComparison.Ordinal))
                     return stem;
                 continue;
             }
 
+            var latin = !IsCyrillic(stem);
             var token = tokens.FirstOrDefault(t =>
-                (exactOnly ? t == stem : t.StartsWith(stem, StringComparison.Ordinal))
+                (latin ? MatchesLatin(t, stem) : exactOnly ? t == stem : t.StartsWith(stem, StringComparison.Ordinal))
                 && (excludes is null || !excludes.Any(e => t.StartsWith(e, StringComparison.Ordinal))));
 
             if (token is not null)

@@ -4,6 +4,8 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.Filters;
+using Microsoft.AspNetCore.Mvc.ModelBinding;
 using SweetHomeApi.Controllers.Movies.Dto;
 using SweetHomeApi.Controllers.Wardrobe.Dto;
 
@@ -15,6 +17,7 @@ namespace SweetHomeApi.Controllers.Wardrobe;
 public class WardrobeController(IWardrobeService wardrobeService, UserManager<IdentityUser> userManager) : ControllerBase
 {
     public const int MaxImageBytes = 5 * 1024 * 1024;
+    private const int MaxRequestBytes = MaxImageBytes + 512 * 1024;
 
     [HttpGet("dictionaries")]
     public IActionResult GetDictionaries()
@@ -52,10 +55,23 @@ public class WardrobeController(IWardrobeService wardrobeService, UserManager<Id
         if (userId is null)
             return Unauthorized();
 
+        var details = new List<ErrorDetailDto>();
+        var parsedCategory = ParseEnum<WardrobeCategory>(category);
+        if (!string.IsNullOrWhiteSpace(category) && parsedCategory is null)
+            details.Add(new ErrorDetailDto { Field = "category", Message = "Неизвестная категория" });
+        if (!string.IsNullOrWhiteSpace(season) && ParseEnum<WardrobeSeason>(season) is null)
+            details.Add(new ErrorDetailDto { Field = "season", Message = "Неизвестный сезон" });
+        if (!string.IsNullOrWhiteSpace(style) && ParseEnum<WardrobeStyle>(style) is null)
+            details.Add(new ErrorDetailDto { Field = "style", Message = "Неизвестный стиль" });
+        if (!string.IsNullOrWhiteSpace(color) && !WardrobeDictionaries.IsKnownColor(color.Trim()))
+            details.Add(new ErrorDetailDto { Field = "color", Message = "Неизвестный цвет" });
+        if (details.Count > 0)
+            return BadRequest(ValidationError(details));
+
         var result = await wardrobeService.GetItemsAsync(userId, new WardrobeItemQuery
         {
             Query = query,
-            Category = ParseEnum<WardrobeCategory>(category),
+            Category = parsedCategory,
             Season = NormalizeCode(season),
             Style = NormalizeCode(style),
             Color = NormalizeCode(color),
@@ -139,23 +155,45 @@ public class WardrobeController(IWardrobeService wardrobeService, UserManager<Id
         if (userId is null)
             return Unauthorized();
 
-        var image = await wardrobeService.GetImageAsync(userId, itemId);
+        var result = await wardrobeService.GetImageAsync(userId, itemId);
+        if (result.Status == WardrobeOperationStatus.NotFound)
+            return NotFound(ItemNotFound());
+
+        var image = result.Value;
         if (image is null)
             return NotFound(ImageNotFound());
 
         Response.Headers.CacheControl = "private, max-age=86400";
+        Response.Headers.XContentTypeOptions = "nosniff";
         return File(image.Data, image.ContentType);
     }
 
     [HttpPut("items/{itemId}/image")]
-    [Consumes("multipart/form-data")]
-    [RequestSizeLimit(MaxImageBytes + 512 * 1024)]
-    [RequestFormLimits(MultipartBodyLengthLimit = MaxImageBytes + 512 * 1024)]
-    public async Task<IActionResult> UploadImage([FromRoute] string itemId, IFormFile? file)
+    [DisableFormValueModelBinding]
+    [RequestSizeLimit(MaxRequestBytes)]
+    [RequestFormLimits(MultipartBodyLengthLimit = MaxRequestBytes)]
+    public async Task<IActionResult> UploadImage([FromRoute] string itemId)
     {
         var userId = GetUserId();
         if (userId is null)
             return Unauthorized();
+
+        // Форму читаем вручную: так анонимный запрос получает 401, а не 415, и все ошибки идут в общем формате.
+        if (!Request.HasFormContentType)
+            return BadRequest(ValidationError([new ErrorDetailDto { Field = "file", Message = "Отправьте фото как multipart/form-data в поле file" }]));
+
+        if (Request.ContentLength > MaxRequestBytes)
+            return BadRequest(ValidationError([new ErrorDetailDto { Field = "file", Message = "Фото должно быть не больше 5 МБ" }]));
+
+        IFormFile? file;
+        try
+        {
+            file = (await Request.ReadFormAsync(HttpContext.RequestAborted)).Files.GetFile("file");
+        }
+        catch (Exception ex) when (ex is InvalidDataException or IOException or BadHttpRequestException)
+        {
+            return BadRequest(ValidationError([new ErrorDetailDto { Field = "file", Message = "Фото должно быть не больше 5 МБ" }]));
+        }
 
         if (file is null || file.Length == 0)
             return BadRequest(ValidationError([new ErrorDetailDto { Field = "file", Message = "Выберите фото" }]));
@@ -365,7 +403,7 @@ public class WardrobeController(IWardrobeService wardrobeService, UserManager<Id
     /// <summary>Разбирает код перечисления (без учёта регистра), числовые значения не принимаются.</summary>
     private static T? ParseEnum<T>(string? value) where T : struct, Enum
     {
-        if (string.IsNullOrWhiteSpace(value) || value.Trim().Any(char.IsDigit))
+        if (string.IsNullOrWhiteSpace(value) || value.Trim().Any(c => !char.IsLetter(c) && c != '_'))
             return null;
 
         return Enum.TryParse<T>(value.Trim(), true, out var parsed) && Enum.IsDefined(parsed) ? parsed : null;
@@ -394,13 +432,13 @@ public class WardrobeController(IWardrobeService wardrobeService, UserManager<Id
         else if (colors.Any(x => !WardrobeDictionaries.IsKnownColor(x)))
             details.Add(new ErrorDetailDto { Field = "colors", Message = "Неизвестный цвет" });
 
-        if (Codes(dto.Seasons).Any(x => !Enum.TryParse<WardrobeSeason>(x, false, out _)))
+        if (Codes(dto.Seasons).Any(x => ParseEnum<WardrobeSeason>(x) is null))
             details.Add(new ErrorDetailDto { Field = "seasons", Message = "Неизвестный сезон" });
 
         var styles = Codes(dto.Styles);
         if (styles.Count == 0)
             details.Add(new ErrorDetailDto { Field = "styles", Message = "Укажите хотя бы один стиль" });
-        else if (styles.Any(x => !Enum.TryParse<WardrobeStyle>(x, false, out _)))
+        else if (styles.Any(x => ParseEnum<WardrobeStyle>(x) is null))
             details.Add(new ErrorDetailDto { Field = "styles", Message = "Неизвестный стиль" });
 
         if (dto.Warmth is null or < 1 or > 5)
@@ -511,5 +549,25 @@ public class WardrobeController(IWardrobeService wardrobeService, UserManager<Id
             Message = message,
             TraceId = HttpContext.TraceIdentifier
         };
+    }
+}
+
+/// <summary>
+/// Не даёт MVC читать форму до действия: иначе слишком большой файл превращается
+/// в англоязычный ProblemDetails, а не в нашу ошибку валидации.
+/// </summary>
+[AttributeUsage(AttributeTargets.Method)]
+public sealed class DisableFormValueModelBindingAttribute : Attribute, IResourceFilter
+{
+    public void OnResourceExecuting(ResourceExecutingContext context)
+    {
+        var factories = context.ValueProviderFactories;
+        factories.RemoveType<FormValueProviderFactory>();
+        factories.RemoveType<FormFileValueProviderFactory>();
+        factories.RemoveType<JQueryFormValueProviderFactory>();
+    }
+
+    public void OnResourceExecuted(ResourceExecutedContext context)
+    {
     }
 }

@@ -84,6 +84,29 @@ public class WardrobeRepository(SweetHomeDbContext context) : IWardrobeRepositor
             .FirstOrDefaultAsync(x => x.UserId == userId && x.Id == itemId);
     }
 
+    public Task<WardrobeItem?> GetItemAsNoTrackingAsync(string userId, string itemId)
+    {
+        return context.WardrobeItems
+            .AsNoTracking()
+            .FirstOrDefaultAsync(x => x.UserId == userId && x.Id == itemId);
+    }
+
+    public Task<List<WardrobeItem>> GetItemsByIdsAsNoTrackingAsync(string userId, IReadOnlyCollection<string> itemIds)
+    {
+        var ids = itemIds.ToList();
+        return context.WardrobeItems
+            .AsNoTracking()
+            .Where(x => x.UserId == userId && ids.Contains(x.Id))
+            .ToListAsync();
+    }
+
+    public Task<WardrobeOutfit?> GetOutfitAsNoTrackingAsync(string userId, string outfitId)
+    {
+        return context.WardrobeOutfits
+            .AsNoTracking()
+            .FirstOrDefaultAsync(x => x.UserId == userId && x.Id == outfitId);
+    }
+
     public async Task AddItemAsync(WardrobeItem item)
     {
         context.WardrobeItems.Add(item);
@@ -189,9 +212,24 @@ public class WardrobeRepository(SweetHomeDbContext context) : IWardrobeRepositor
         await context.SaveChangesAsync();
     }
 
-    public Task SaveChangesAsync()
+    public Task MarkItemsWornAsync(string userId, IReadOnlyCollection<string> itemIds, DateTime wornAt)
     {
-        return context.SaveChangesAsync();
+        var ids = itemIds.ToList();
+        return context.WardrobeItems
+            .Where(x => x.UserId == userId && ids.Contains(x.Id))
+            .ExecuteUpdateAsync(setters => setters
+                .SetProperty(x => x.WearCount, x => x.WearCount + 1)
+                .SetProperty(x => x.LastWornAt, wornAt));
+    }
+
+    public Task MarkOutfitWornAsync(string userId, string outfitId, DateTime wornAt)
+    {
+        return context.WardrobeOutfits
+            .Where(x => x.UserId == userId && x.Id == outfitId)
+            .ExecuteUpdateAsync(setters => setters
+                .SetProperty(x => x.WearCount, x => x.WearCount + 1)
+                .SetProperty(x => x.LastWornAt, wornAt)
+                .SetProperty(x => x.UpdatedAt, wornAt));
     }
 
     private static string EscapeLike(string value)

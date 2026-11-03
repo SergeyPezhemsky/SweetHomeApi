@@ -39,8 +39,12 @@ public class WidgetsService : IWidgetsService
         if (missing.Count == 0)
             return widgets;
 
-        await _mainWidgetRepository.AddManyAsync(missing);
-        return [..widgets, ..missing];
+        var added = await _mainWidgetRepository.AddMissingAsync(userId, missing);
+        if (added.Count == missing.Count)
+            return [..widgets, ..added];
+
+        // Параллельный запрос успел добавить виджет первым — перечитываем актуальный список.
+        return await _mainWidgetRepository.GetByUserIdAsync(userId);
     }
 
     /// <summary>

@@ -41,6 +41,7 @@ public static class OutfitGenerator
     private const int CandidatesPerSlot = 12;
     private const int MaxCandidates = 50_000;
     private const int ReusePenalty = 8;
+    private const int AccessoryBonus = 2;
 
     private enum OuterwearMode
     {
@@ -91,7 +92,9 @@ public static class OutfitGenerator
             .Take(CandidatesPerSlot)
             .ToList();
 
-        bool BaseFits(WardrobeItem x) => Math.Abs(x.Warmth - baseWarmth) <= 2 && !(targetWarmth <= 2 && x.Warmth >= 4);
+        // В жару допускаем только лёгкие вещи (±1), в остальное время — ±2 от нужной теплоты.
+        var baseTolerance = targetWarmth <= 2 ? 1 : 2;
+        bool BaseFits(WardrobeItem x) => Math.Abs(x.Warmth - baseWarmth) <= baseTolerance;
 
         var tops = Slot(WardrobeCategory.TOP, BaseFits, baseWarmth);
         var bottoms = Slot(WardrobeCategory.BOTTOM, BaseFits, baseWarmth);
@@ -134,13 +137,13 @@ public static class OutfitGenerator
 
             var score = OutfitScore(items, baseWarmth, targetWarmth, nowUtc, seed);
 
-            // Аксессуар добавляем, только если он не портит образ.
+            // Аксессуар добавляем, только если он не снижает оценку образа; за законченность образа +2.
             WardrobeItem? bestAccessory = null;
             var bestWithAccessory = score;
             foreach (var accessory in accessories)
             {
-                var withAccessory = OutfitScore([..items, accessory], baseWarmth, targetWarmth, nowUtc, seed) + 2;
-                if (withAccessory > bestWithAccessory)
+                var withAccessory = OutfitScore([..items, accessory], baseWarmth, targetWarmth, nowUtc, seed);
+                if (withAccessory >= bestWithAccessory)
                 {
                     bestWithAccessory = withAccessory;
                     bestAccessory = accessory;
@@ -150,7 +153,7 @@ public static class OutfitGenerator
             if (bestAccessory is not null)
             {
                 items.Add(bestAccessory);
-                score = bestWithAccessory;
+                score = bestWithAccessory + AccessoryBonus;
             }
 
             candidates.Add(new Candidate
@@ -202,6 +205,8 @@ public static class OutfitGenerator
             });
         }
 
+        // Штраф за повтор вещей влияет на выбор, но показываем варианты от лучшего к худшему.
+        result.Outfits = result.Outfits.OrderByDescending(x => x.Score).ToList();
         return result;
     }
 
@@ -274,8 +279,10 @@ public static class OutfitGenerator
 
         if (outerwearMode == OuterwearMode.Required && outerwear.Count == 0)
         {
-            var level = WardrobeDictionaries.WarmthLevels.First(x => x.Level == Math.Max(1, targetWarmth - 1)).Name.ToLowerInvariant();
-            result.Missing.Add($"Добавьте верхнюю одежду {context} — теплота не ниже «{level}»");
+            var from = WardrobeDictionaries.WarmthLevels.First(x => x.Level == Math.Max(1, targetWarmth - 1)).Name.ToLowerInvariant();
+            var to = WardrobeDictionaries.WarmthLevels.First(x => x.Level == Math.Min(5, targetWarmth + 1)).Name.ToLowerInvariant();
+            var range = from == to ? $"«{from}»" : $"от «{from}» до «{to}»";
+            result.Missing.Add($"Добавьте верхнюю одежду {context} — по теплоте {range}");
         }
     }
 

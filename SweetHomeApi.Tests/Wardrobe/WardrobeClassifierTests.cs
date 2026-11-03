@@ -75,6 +75,25 @@ public class WardrobeClassifierTests
     [InlineData("Grey hoodie", WardrobeCategory.TOP, "GRAY")]
     [InlineData("Юбка миди оливковая", WardrobeCategory.BOTTOM, "OLIVE")]
     [InlineData("Серьги серебряные", WardrobeCategory.ACCESSORY, "GRAY")]
+    [InlineData("Baggy jeans", WardrobeCategory.BOTTOM, "BLUE")]
+    [InlineData("Bootcut jeans", WardrobeCategory.BOTTOM, null)]
+    [InlineData("Capri pants", WardrobeCategory.BOTTOM, null)]
+    [InlineData("Tie-dye t-shirt", WardrobeCategory.TOP, "MULTI")]
+    [InlineData("Dress shirt white", WardrobeCategory.TOP, "WHITE")]
+    [InlineData("Dress shoes black", WardrobeCategory.SHOES, "BLACK")]
+    [InlineData("Shirt dress", WardrobeCategory.DRESS, null)]
+    [InlineData("Sweater dress", WardrobeCategory.DRESS, null)]
+    [InlineData("Suit jacket", WardrobeCategory.OUTERWEAR, null)]
+    [InlineData("Running shoes", WardrobeCategory.SHOES, null)]
+    [InlineData("Grey sweatpants", WardrobeCategory.BOTTOM, "GRAY")]
+    [InlineData("Navy peacoat", WardrobeCategory.OUTERWEAR, "NAVY")]
+    [InlineData("Leather handbag", WardrobeCategory.ACCESSORY, null)]
+    [InlineData("Сапожки замшевые", WardrobeCategory.SHOES, null)]
+    [InlineData("Ботильоны на каблуке", WardrobeCategory.SHOES, null)]
+    [InlineData("Сумочка через плечо", WardrobeCategory.ACCESSORY, null)]
+    [InlineData("Курточка лёгкая", WardrobeCategory.OUTERWEAR, null)]
+    [InlineData("Платье-рубашка", WardrobeCategory.DRESS, null)]
+    [InlineData("Бирюзовая блузка", WardrobeCategory.TOP, "LIGHT_BLUE")]
     public void ClassifiesCommonItems(string name, WardrobeCategory category, string? color)
     {
         var result = WardrobeClassifier.Classify(name);
@@ -82,6 +101,39 @@ public class WardrobeClassifierTests
         Assert.Equal(category, result.Category);
         if (color is not null)
             Assert.Contains(color, result.Colors);
+    }
+
+    [Fact]
+    public void SuitJacket_IsOfficeBlazerNotWarmCasualJacket()
+    {
+        var result = WardrobeClassifier.Classify("Suit jacket");
+
+        Assert.Equal(2, result.Warmth);
+        Assert.Contains("OFFICE", result.Styles);
+    }
+
+    [Fact]
+    public void RunningShoes_AreSport()
+    {
+        Assert.Equal("SPORT", WardrobeClassifier.Classify("Running shoes").Styles[0]);
+    }
+
+    [Fact]
+    public void LightBlue_IsAColorNotALightFabric()
+    {
+        var result = WardrobeClassifier.Classify("Light blue shirt");
+
+        Assert.Equal(2, result.Warmth);
+        Assert.Equal(["LIGHT_BLUE"], result.Colors);
+    }
+
+    [Fact]
+    public void Earrings_AreNotGray()
+    {
+        var result = WardrobeClassifier.Classify("Серёжки золотые");
+
+        Assert.Equal(WardrobeCategory.ACCESSORY, result.Category);
+        Assert.DoesNotContain("GRAY", result.Colors);
     }
 
     [Fact]
@@ -127,6 +179,7 @@ public class WardrobeClassifierTests
     [InlineData("#F5DC3C", "YELLOW")]
     [InlineData("#3A8F48", "GREEN")]
     [InlineData("#D9C2A3", "BEIGE")]
+    [InlineData("#C19A6B", "BEIGE")]
     public void NearestColor_MapsPhotoColors(string hex, string expected)
     {
         Assert.True(WardrobeClassifier.TryParseHex(hex, out var rgb));

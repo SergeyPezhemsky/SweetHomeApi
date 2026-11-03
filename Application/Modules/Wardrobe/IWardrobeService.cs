@@ -9,7 +9,7 @@ public interface IWardrobeService
     Task<bool> DeleteItemAsync(string userId, string itemId);
     Task<WardrobeItem?> WearItemAsync(string userId, string itemId);
 
-    Task<WardrobeItemImage?> GetImageAsync(string userId, string itemId);
+    Task<WardrobeOperationResult<WardrobeItemImage?>> GetImageAsync(string userId, string itemId);
     Task<WardrobeItem?> SetImageAsync(string userId, string itemId, byte[] data, string contentType);
     Task<WardrobeItem?> DeleteImageAsync(string userId, string itemId);
 

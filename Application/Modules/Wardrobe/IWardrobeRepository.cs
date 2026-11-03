@@ -7,6 +7,9 @@ public interface IWardrobeRepository
     Task<List<WardrobeItem>> GetAllItemsAsync(string userId);
     Task<List<WardrobeItem>> GetItemsByIdsAsync(string userId, IReadOnlyCollection<string> itemIds);
     Task<WardrobeItem?> GetItemAsync(string userId, string itemId);
+    Task<WardrobeItem?> GetItemAsNoTrackingAsync(string userId, string itemId);
+    Task<List<WardrobeItem>> GetItemsByIdsAsNoTrackingAsync(string userId, IReadOnlyCollection<string> itemIds);
+    Task<WardrobeOutfit?> GetOutfitAsNoTrackingAsync(string userId, string outfitId);
     Task AddItemAsync(WardrobeItem item);
     Task UpdateItemAsync(WardrobeItem item);
 
@@ -22,6 +25,9 @@ public interface IWardrobeRepository
     Task AddOutfitAsync(WardrobeOutfit outfit);
     Task DeleteOutfitAsync(WardrobeOutfit outfit);
 
-    /// <summary>Сохраняет изменения отслеживаемых сущностей (отметка «надето»).</summary>
-    Task SaveChangesAsync();
+    /// <summary>Атомарно увеличивает счётчик ношения вещей (без потерянных обновлений при параллельных запросах).</summary>
+    Task MarkItemsWornAsync(string userId, IReadOnlyCollection<string> itemIds, DateTime wornAt);
+
+    /// <summary>Атомарно увеличивает счётчик ношения образа.</summary>
+    Task MarkOutfitWornAsync(string userId, string outfitId, DateTime wornAt);
 }

@@ -82,18 +82,18 @@ public class WardrobeService(IWardrobeRepository repository, TimeProvider? timeP
         if (existing is null)
             return null;
 
-        MarkWorn(existing, UtcNow);
-        await repository.SaveChangesAsync();
-        return existing;
+        await repository.MarkItemsWornAsync(userId, [itemId], UtcNow);
+        return await repository.GetItemAsNoTrackingAsync(userId, itemId);
     }
 
-    public async Task<WardrobeItemImage?> GetImageAsync(string userId, string itemId)
+    public async Task<WardrobeOperationResult<WardrobeItemImage?>> GetImageAsync(string userId, string itemId)
     {
         var existing = await repository.GetItemAsync(userId, itemId);
-        if (existing is null || !existing.HasImage)
-            return null;
+        if (existing is null)
+            return WardrobeOperationResult<WardrobeItemImage?>.NotFound();
 
-        return await repository.GetImageAsync(itemId);
+        var image = existing.HasImage ? await repository.GetImageAsync(itemId) : null;
+        return WardrobeOperationResult<WardrobeItemImage?>.Ok(image);
     }
 
     public async Task<WardrobeItem?> SetImageAsync(string userId, string itemId, byte[] data, string contentType)
@@ -134,11 +134,15 @@ public class WardrobeService(IWardrobeRepository repository, TimeProvider? timeP
         var outfits = await repository.GetOutfitsAsync(userId);
         var items = (await repository.GetAllItemsAsync(userId)).ToDictionary(x => x.Id);
 
-        return outfits.Select(outfit => new WardrobeOutfitDetails
-        {
-            Outfit = outfit,
-            Items = outfit.ItemIds.Where(items.ContainsKey).Select(id => items[id]).ToList()
-        }).ToList();
+        return outfits
+            .Select(outfit => new WardrobeOutfitDetails
+            {
+                Outfit = outfit,
+                Items = outfit.ItemIds.Where(items.ContainsKey).Select(id => items[id]).ToList()
+            })
+            // Образ, у которого после удаления вещей осталось меньше двух, не показываем.
+            .Where(x => x.Items.Count >= 2)
+            .ToList();
     }
 
     public async Task<WardrobeOperationResult<WardrobeOutfitDetails>> CreateOutfitAsync(string userId, WardrobeOutfit outfit)
@@ -186,27 +190,16 @@ public class WardrobeService(IWardrobeRepository repository, TimeProvider? timeP
             return null;
 
         var now = UtcNow;
-        var items = await repository.GetItemsByIdsAsync(userId, outfit.ItemIds);
-        outfit.WearCount++;
-        outfit.LastWornAt = now;
-        outfit.UpdatedAt = now;
-        foreach (var item in items)
-            MarkWorn(item, now);
+        await repository.MarkOutfitWornAsync(userId, outfitId, now);
+        await repository.MarkItemsWornAsync(userId, outfit.ItemIds, now);
 
-        await repository.SaveChangesAsync();
-
-        var byId = items.ToDictionary(x => x.Id);
+        var updated = await repository.GetOutfitAsNoTrackingAsync(userId, outfitId) ?? outfit;
+        var items = (await repository.GetItemsByIdsAsNoTrackingAsync(userId, updated.ItemIds)).ToDictionary(x => x.Id);
         return new WardrobeOutfitDetails
         {
-            Outfit = outfit,
-            Items = outfit.ItemIds.Where(byId.ContainsKey).Select(id => byId[id]).ToList()
+            Outfit = updated,
+            Items = updated.ItemIds.Where(items.ContainsKey).Select(id => items[id]).ToList()
         };
-    }
-
-    private static void MarkWorn(WardrobeItem item, DateTime now)
-    {
-        item.WearCount++;
-        item.LastWornAt = now;
     }
 
     private static void Normalize(WardrobeItem item)

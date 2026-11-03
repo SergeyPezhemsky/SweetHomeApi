@@ -87,8 +87,36 @@ public class OutfitGeneratorTests
         Assert.All(result.Outfits, outfit =>
         {
             Assert.DoesNotContain(outfit.Items, x => x.Category == WardrobeCategory.OUTERWEAR);
-            Assert.DoesNotContain(outfit.Items, x => x.Warmth >= 4);
+            Assert.DoesNotContain(outfit.Items, x => x.Warmth >= 3);
         });
+    }
+
+    [Fact]
+    public void Outfits_AreReturnedBestFirst()
+    {
+        var result = OutfitGenerator.Generate(CasualWardrobe(), new OutfitSuggestionRequest
+        {
+            Occasion = WardrobeStyle.CASUAL,
+            Temperature = -5,
+            Count = 10
+        }, Now);
+
+        Assert.Equal(result.Outfits.Select(x => x.Score).OrderByDescending(x => x), result.Outfits.Select(x => x.Score));
+    }
+
+    [Fact]
+    public void TooWarmOuterwearOnly_HintNamesTheRange()
+    {
+        var wardrobe = CasualWardrobe().Where(x => x.Category != WardrobeCategory.OUTERWEAR).ToList();
+        wardrobe.Add(Item("puffer", WardrobeCategory.OUTERWEAR, 5, "BLACK"));
+
+        var result = OutfitGenerator.Generate(wardrobe, new OutfitSuggestionRequest
+        {
+            Occasion = WardrobeStyle.CASUAL,
+            Temperature = 12
+        }, Now);
+
+        Assert.Contains(result.Missing, x => x.Contains("от «лёгкая» до «тёплая»"));
     }
 
     [Fact]
