@@ -14,6 +14,9 @@ internal sealed class FakeFinanceRepository : IFinanceRepository
     /// <summary>Имитация сбоя базы при сохранении результата распознавания.</summary>
     public bool FailNextComplete { get; set; }
 
+    /// <summary>Сколько успешных поисков PENDING-чека пропустить, прежде чем «упасть» (null — не падать).</summary>
+    public int? FailPendingLookupAfter { get; set; }
+
     public Task<int> NextRevisionAsync() => Task.FromResult(++_revision);
 
     public Task AddReceiptAsync(FinanceReceipt receipt, FinanceReceiptImage? image)
@@ -95,12 +98,19 @@ internal sealed class FakeFinanceRepository : IFinanceRepository
 
     public Task<FinancePendingRecognition?> GetPendingRecognitionAsync(string receiptId)
     {
+        if (FailPendingLookupAfter is { } left)
+        {
+            if (left <= 0)
+                throw new InvalidOperationException("database is down");
+            FailPendingLookupAfter = left - 1;
+        }
+
         if (!Receipts.TryGetValue(receiptId, out var receipt) || receipt.Status != FinanceReceiptStatus.PENDING
             || !Images.TryGetValue(receiptId, out var image))
             return Task.FromResult<FinancePendingRecognition?>(null);
 
         return Task.FromResult<FinancePendingRecognition?>(new FinancePendingRecognition(
-            receipt.Id, receipt.UserId, receipt.Revision, receipt.UploadedOn, image.Data, image.ContentType));
+            receipt.Id, receipt.UserId, receipt.Revision, receipt.UploadedOn, receipt.PurchasedOn, image.Data, image.ContentType));
     }
 
     public Task<bool> CompleteRecognitionAsync(string receiptId, int revision, FinanceRecognitionResult result, DateTime updatedAt)

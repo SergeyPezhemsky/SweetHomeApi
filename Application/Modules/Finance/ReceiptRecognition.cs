@@ -15,6 +15,9 @@ public class RecognizedReceipt
     public decimal? Total { get; set; }
     public FinanceCategory? Category { get; set; }
     public List<RecognizedItem> Items { get; set; } = [];
+
+    /// <summary>Ответ был оборван и достроен: без явного итога такому чеку верить нельзя.</summary>
+    public bool Repaired { get; set; }
 }
 
 public record RecognizedItem(string Name, decimal? Quantity, decimal? Price, decimal Amount, FinanceCategory Category);
@@ -26,6 +29,10 @@ public static class ReceiptRecognitionPrompt
 
     public const string User = "Распознай чек на фото и верни JSON строго по схеме.";
 
+    /// <summary>Значения-заглушки из примера схемы: объект с ними — эхо промпта, а не ответ.</summary>
+    public const string StorePlaceholder = "название магазина или организации, null если не видно";
+    public const string ItemPlaceholder = "название позиции как на чеке";
+
     private static string BuildSystem()
     {
         var categories = string.Join('\n', FinanceDictionaries.Categories.Select(x => $"- {x.Code}: {x.Name} — {x.Hint}"));
@@ -36,13 +43,13 @@ public static class ReceiptRecognitionPrompt
             Схема:
             {
               "isReceipt": true,
-              "store": "название магазина или организации, null если не видно",
+              "store": "{{StorePlaceholder}}",
               "date": "дата покупки YYYY-MM-DD, null если не видно",
               "currency": "код валюты ISO 4217, например RUB",
               "total": 1234.56,
               "category": "код категории для чека целиком",
               "items": [
-                { "name": "название позиции как на чеке", "quantity": 1, "price": 99.90, "amount": 99.90, "category": "код категории" }
+                { "name": "{{ItemPlaceholder}}", "quantity": 1, "price": 99.90, "amount": 99.90, "category": "код категории" }
               ]
             }
 
@@ -67,9 +74,11 @@ public static class ReceiptRecognitionParser
 {
     public static RecognizedReceipt? Parse(string? response)
     {
-        var json = ExtractJsonObject(response);
-        if (json is null)
+        var extracted = Extract(response);
+        if (extracted is null)
             return null;
+
+        var (json, repaired) = extracted.Value;
 
         JsonDocument document;
         try
@@ -88,7 +97,12 @@ public static class ReceiptRecognitionParser
         try
         {
             using (document)
-                return ReadReceipt(document.RootElement);
+            {
+                var receipt = ReadReceipt(document.RootElement);
+                if (receipt is not null)
+                    receipt.Repaired = repaired;
+                return receipt;
+            }
         }
         catch (InvalidOperationException)
         {
@@ -142,39 +156,54 @@ public static class ReceiptRecognitionParser
         }
     }
 
+    /// <summary>Сколько текста ответа разбираем и сколько стартов «{» проверяем: защита от квадратичного разбора.</summary>
+    public const int MaxScanLength = 256 * 1024;
+    private const int MaxObjectStarts = 200;
+    private const int MaxRepairAttempts = 3;
+
+    private static readonly string[] ReceiptKeys = ["isReceipt", "total", "items", "store", "date", "currency", "category"];
+
+    public static string? ExtractJsonObject(string? text) => Extract(text)?.Json;
+
     /// <summary>
-    /// JSON-объект ответа. Модель может обернуть его в ```json, пояснения или блок рассуждений &lt;think&gt;:
-    /// рассуждения выкидываем, из нескольких объектов верхнего уровня берём последний (ответ идёт после примеров).
-    /// Если ответ оборван (закончились токены), достраиваем объект до последнего целого значения —
-    /// так итог и уже выписанные позиции не теряются.
+    /// JSON-объект ответа. Рассуждения модели (&lt;think&gt;…&lt;/think&gt;, в том числе без открывающего тега) отбрасываем.
+    /// Кандидаты — объекты верхнего уровня (вложенные в другой кандидат не считаются) и оборванный ответ, достроенный
+    /// до последнего целого значения. Побеждает объект, больше всего похожий на чек (ключи total, items, …);
+    /// эхо примера из промпта отбрасывается; при равенстве — более поздний.
     /// </summary>
-    public static string? ExtractJsonObject(string? text)
+    private static (string Json, bool Repaired)? Extract(string? text)
     {
         if (string.IsNullOrWhiteSpace(text))
             return null;
 
+        // Qwen3 в режиме рассуждений может отдать «…</think>» без открывающего тега: ответ — после последнего закрывающего.
+        var closeThink = text.LastIndexOf("</think>", StringComparison.OrdinalIgnoreCase);
+        if (closeThink >= 0)
+            text = text[(closeThink + "</think>".Length)..];
         text = ThinkBlock.Replace(text, string.Empty);
         // Незакрытый блок рассуждений (оборванный ответ) — всё после него рассуждение.
         var openThink = text.IndexOf("<think>", StringComparison.OrdinalIgnoreCase);
         if (openThink >= 0)
             text = text[..openThink];
+        if (text.Length > MaxScanLength)
+            text = text[..MaxScanLength];
 
-        string? last = null;
-        var lastStart = -1;
-        var firstUnclosed = -1;
+        var candidates = new List<(int Start, int End, string Json, bool Repaired)>();
+        var unclosed = new List<int>();
         var position = 0;
-        while (position < text.Length)
+        var starts = 0;
+        while (position < text.Length && starts < MaxObjectStarts)
         {
             var start = text.IndexOf('{', position);
             if (start < 0)
                 break;
 
+            starts++;
             var end = FindObjectEnd(text, start);
             if (end < 0)
             {
-                // Не закрыт до конца текста: либо оборванный ответ, либо случайная «{» в пояснении перед ответом.
-                if (firstUnclosed < 0)
-                    firstUnclosed = start;
+                // Не закрыт до конца текста: оборванный ответ или случайная «{» в пояснении.
+                unclosed.Add(start);
                 position = start + 1;
                 continue;
             }
@@ -182,8 +211,7 @@ public static class ReceiptRecognitionParser
             var candidate = text[start..(end + 1)];
             if (IsValidJson(candidate))
             {
-                last = candidate;
-                lastStart = start;
+                candidates.Add((start, end + 1, candidate, false));
                 position = end + 1;
             }
             else
@@ -192,12 +220,58 @@ public static class ReceiptRecognitionParser
             }
         }
 
-        // Незакрытый объект раньше найденного: найденный может быть позицией внутри оборванного ответа.
-        // Если оборванный объект удаётся достроить — берём его (в нём итог), иначе это была случайная скобка.
-        if (firstUnclosed >= 0 && (last is null || firstUnclosed < lastStart))
-            return RepairTruncated(text, firstUnclosed) ?? last;
+        // Внешний незакрытый объект — корень оборванного ответа; если не достраивается — пробуем следующий.
+        foreach (var start in unclosed.Take(MaxRepairAttempts))
+        {
+            var repaired = RepairTruncated(text, start);
+            if (repaired is not null)
+            {
+                candidates.Add((start, text.Length, repaired, true));
+                break;
+            }
+        }
 
-        return last;
+        var roots = candidates
+            .Where(c => !candidates.Any(o => o != c && o.Start <= c.Start && c.End <= o.End && (o.Start < c.Start || c.End < o.End)))
+            .ToList();
+        if (roots.Count == 0)
+            return null;
+
+        var best = roots
+            .Select(c => (Candidate: c, Score: ReceiptScore(c.Json)))
+            .Where(x => x.Score >= 0)
+            .OrderByDescending(x => x.Score)
+            .ThenByDescending(x => x.Candidate.Start)
+            .Select(x => x.Candidate)
+            .FirstOrDefault();
+
+        return best.Json is null ? null : (best.Json, best.Repaired);
+    }
+
+    /// <summary>Сколько ключей чека есть у объекта; -1 — эхо примера из промпта.</summary>
+    private static int ReceiptScore(string json)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(json, new JsonDocumentOptions
+            {
+                AllowTrailingCommas = true,
+                CommentHandling = JsonCommentHandling.Skip
+            });
+            var root = document.RootElement;
+            if (root.ValueKind != JsonValueKind.Object)
+                return -1;
+
+            if (json.Contains(ReceiptRecognitionPrompt.StorePlaceholder, StringComparison.Ordinal)
+                || json.Contains(ReceiptRecognitionPrompt.ItemPlaceholder, StringComparison.Ordinal))
+                return -1;
+
+            return ReceiptKeys.Count(key => TryGetProperty(root, key, out _));
+        }
+        catch (Exception ex) when (ex is JsonException or InvalidOperationException)
+        {
+            return -1;
+        }
     }
 
     private static readonly System.Text.RegularExpressions.Regex ThinkBlock = new(
@@ -302,16 +376,47 @@ public static class ReceiptRecognitionParser
         return Enum.TryParse<FinanceCategory>(code, false, out var parsed) && Enum.IsDefined(parsed) ? parsed : null;
     }
 
+    /// <summary>Код валюты, который не удалось определить: такой чек не попадёт в рублёвые итоги.</summary>
+    public const string UnknownCurrency = "XXX";
+
+    /// <summary>
+    /// Рубли — для пустого значения и рублёвых обозначений; известные символы — в коды ISO;
+    /// всё непонятное — <see cref="UnknownCurrency"/>, а не молча рубли (50 € не должны стать 50 ₽).
+    /// </summary>
     public static string NormalizeCurrency(string? value)
     {
         if (string.IsNullOrWhiteSpace(value))
             return FinanceDefaults.Currency;
 
-        var code = value.Trim().ToUpperInvariant();
-        if (code is "₽" or "Р" or "РУБ" or "РУБ." or "RUR" or "Р." or "RUBLE" or "RUBLES")
-            return FinanceDefaults.Currency;
+        var code = value.Trim().TrimEnd('.').ToUpperInvariant();
+        switch (code)
+        {
+            case "₽" or "Р" or "РУБ" or "РУБЛЬ" or "РУБЛЕЙ" or "RUR" or "RUB" or "RUBLE" or "RUBLES":
+                return FinanceDefaults.Currency;
+            case "$" or "US$" or "USD" or "ДОЛЛ" or "ДОЛЛАР":
+                return "USD";
+            case "€" or "EUR" or "EURO" or "ЕВРО":
+                return "EUR";
+            case "£" or "GBP":
+                return "GBP";
+            case "₸" or "ТГ" or "ТЕНГЕ":
+                return "KZT";
+            case "₺":
+                return "TRY";
+            case "₾":
+                return "GEL";
+            case "֏":
+                return "AMD";
+            case "BR" or "БЕЛ. РУБ" or "BYN":
+                return "BYN";
+            case "元" or "人民币":
+                return "CNY";
+            case "円":
+                return "JPY";
+        }
 
-        return code.Length == 3 && code.All(c => c is >= 'A' and <= 'Z') ? code : FinanceDefaults.Currency;
+        // «¥» — и юань, и иена; угадывать не будем.
+        return code.Length == 3 && code.All(c => c is >= 'A' and <= 'Z') ? code : UnknownCurrency;
     }
 
     public static DateOnly? ParseDate(string? value)

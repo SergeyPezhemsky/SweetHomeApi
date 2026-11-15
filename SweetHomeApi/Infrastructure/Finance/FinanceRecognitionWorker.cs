@@ -147,7 +147,19 @@ public class FinanceRecognitionWorker(
                     attempt, attempts, pending.ReceiptId);
                 await Task.Delay(TimeSpan.FromSeconds(Math.Max(0, options.Value.RetryDelaySeconds) * attempt), stoppingToken);
 
-                var current = await repository.GetPendingRecognitionAsync(pending.ReceiptId);
+                FinancePendingRecognition? current;
+                try
+                {
+                    current = await repository.GetPendingRecognitionAsync(pending.ReceiptId);
+                }
+                catch (Exception dbError) when (dbError is not OperationCanceledException || !stoppingToken.IsCancellationRequested)
+                {
+                    // База недоступна между попытками — чек остаётся PENDING, вернёмся к нему позже.
+                    logger.LogError(dbError, "Failed to re-check receipt {ReceiptId} before retry", pending.ReceiptId);
+                    RequeueLater(pending.ReceiptId, stoppingToken);
+                    return null;
+                }
+
                 if (current is null || current.Revision != pending.Revision)
                     return null;
             }

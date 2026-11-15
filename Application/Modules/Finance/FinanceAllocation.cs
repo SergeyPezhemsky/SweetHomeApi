@@ -17,9 +17,17 @@ public static class FinanceAllocation
         if (total <= 0)
             return result;
 
+        var list = items.ToList();
+        // Сумма позиций не положительна (скидки больше покупок — ответ модели явно неверен): весь итог — категории чека.
+        if (list.Sum(x => x.Amount) <= 0)
+        {
+            result[receiptCategory] = total;
+            return result;
+        }
+
         // Веса — только положительные суммы категорий: отдельная строка скидки уменьшает итог,
         // но не должна давать категории отрицательную долю.
-        var weights = items
+        var weights = list
             .GroupBy(x => x.Category)
             .Select(g => (Category: g.Key, Weight: g.Sum(x => x.Amount)))
             .Where(x => x.Weight > 0)

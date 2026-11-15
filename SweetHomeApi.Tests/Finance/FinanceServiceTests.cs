@@ -207,6 +207,57 @@ public class FinanceServiceTests
     }
 
     [Fact]
+    public void RecognizedDateNeverExceedsTomorrowUtc()
+    {
+        var (result, _) = FinanceService.BuildRecognitionResult(
+            new RecognizedReceipt { IsReceipt = true, Total = 10, Date = Today.AddDays(2) }, Today.AddDays(1),
+            new Dictionary<string, FinanceCategory>(), latestDate: Today.AddDays(1));
+
+        Assert.Equal(Today.AddDays(1), result!.PurchasedOn);
+    }
+
+    [Fact]
+    public void MissingDateKeepsCurrentReceiptDate()
+    {
+        var edited = new DateOnly(2026, 11, 2);
+        var (result, _) = FinanceService.BuildRecognitionResult(
+            new RecognizedReceipt { IsReceipt = true, Total = 10 }, Today, new Dictionary<string, FinanceCategory>(), currentDate: edited);
+
+        Assert.Equal(edited, result!.PurchasedOn);
+    }
+
+    [Fact]
+    public void RepairedAnswerWithoutTotalIsUnreadable()
+    {
+        var parsed = ReceiptRecognitionParser.Parse("""{"isReceipt":true,"items":[{"name":"A","amount":89.9},{"name":"B","amount":45},{"name":"C","am""");
+        var (result, failure) = FinanceService.BuildRecognitionResult(parsed, Today, new Dictionary<string, FinanceCategory>());
+
+        Assert.Null(result);
+        Assert.Equal(FinanceFailureReason.UNREADABLE, failure);
+    }
+
+    [Fact]
+    public async Task DatabaseErrorBetweenRetriesRequeuesReceipt()
+    {
+        var (repository, _, receipt) = await UploadAsync();
+        repository.FailPendingLookupAfter = 1;
+        var options = Options.Create(new ReceiptRecognitionOptions
+        {
+            ApiKey = "key", Project = "folder", Retries = 2, RetryDelaySeconds = 0, InternalRetryDelaySeconds = 1
+        });
+        var queue = new FinanceRecognitionQueue(options);
+        var worker = new FinanceRecognitionWorker(queue, CreateScopeFactory(repository,
+                new FakeRecognizer(_ => throw new ReceiptRecognizerUnavailableException("503"))), options,
+            NullLogger<FinanceRecognitionWorker>.Instance);
+
+        await worker.ProcessAsync(receipt.Id, CancellationToken.None);
+
+        Assert.Equal(FinanceReceiptStatus.PENDING, repository.Receipts[receipt.Id].Status);
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        Assert.Equal(receipt.Id, await queue.Reader.ReadAsync(timeout.Token));
+    }
+
+    [Fact]
     public void TotalFallsBackToItemsSum()
     {
         var (result, _) = FinanceService.BuildRecognitionResult(new RecognizedReceipt

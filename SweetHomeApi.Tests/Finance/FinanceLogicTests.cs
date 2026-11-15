@@ -139,6 +139,83 @@ public class FinanceLogicTests
         Assert.Equal(7m, ReceiptRecognitionParser.Parse("""Скобка { без пары, ответ: {"total": 7}""")!.Total);
     }
 
+    [Fact]
+    public void PromptEchoBeforeTruncatedAnswerIsIgnored()
+    {
+        var response = "Схема: " + """{"isReceipt": true, "store": """ + "\"" + ReceiptRecognitionPrompt.StorePlaceholder + "\""
+                       + """, "total": 1234.56, "items": [{"name": "x", "amount": 99.90}]}""" + "\nОтвет: "
+                       + """{"isReceipt":true,"store":"Магнит","total":5320.40,"items":[{"name":"Моло""";
+
+        var parsed = ReceiptRecognitionParser.Parse(response);
+
+        Assert.Equal("Магнит", parsed!.Store);
+        Assert.Equal(5320.40m, parsed.Total);
+        Assert.True(parsed.Repaired);
+    }
+
+    [Fact]
+    public void ItemExampleBeforeTruncatedAnswerDoesNotWin()
+    {
+        var parsed = ReceiptRecognitionParser.Parse(
+            """Например {"name":"Хлеб","amount":45}. Ответ: {"isReceipt":true,"total":5320.40,"items":[{"name":"Сыр","amount":300},{"na""");
+
+        Assert.Equal(5320.40m, parsed!.Total);
+        Assert.Equal("Сыр", Assert.Single(parsed.Items).Name);
+    }
+
+    [Fact]
+    public void ReasoningWithoutOpeningTagIsDropped()
+    {
+        var parsed = ReceiptRecognitionParser.Parse(
+            """Начну черновик: {"isReceipt": true, "store": "Пятерочка", "total": 100, ... </think>{"isReceipt": true, "total": 1520.00, "items": [{"name": "A", "amount": 1000}, {"name": "B", "amount": 520}]}""");
+
+        Assert.Equal(1520m, parsed!.Total);
+        Assert.Equal(2, parsed.Items.Count);
+    }
+
+    [Fact]
+    public void TrailingHypotheticalObjectDoesNotOverrideAnswer()
+    {
+        var parsed = ReceiptRecognitionParser.Parse(
+            """{"isReceipt": true, "store": "Кафе", "total": 300, "items": []} Если бы на фото не было чека, ответ был бы {"isReceipt": false}""");
+
+        Assert.True(parsed!.IsReceipt);
+        Assert.Equal(300m, parsed.Total);
+    }
+
+    [Fact]
+    public void ManyUnclosedBracesAreParsedQuickly()
+    {
+        var watch = System.Diagnostics.Stopwatch.StartNew();
+        ReceiptRecognitionParser.Parse(string.Concat(Enumerable.Repeat("{\"a\":", 100_000)));
+        ReceiptRecognitionParser.Parse(new string('{', 2_000_000));
+        Assert.True(watch.Elapsed < TimeSpan.FromSeconds(5), watch.Elapsed.ToString());
+    }
+
+    [Theory]
+    [InlineData(null, "RUB")]
+    [InlineData("руб.", "RUB")]
+    [InlineData("$", "USD")]
+    [InlineData("€", "EUR")]
+    [InlineData("EURO", "EUR")]
+    [InlineData("JPY", "JPY")]
+    [InlineData("¥", "XXX")]
+    [InlineData("US dollars", "XXX")]
+    public void CurrencyIsNeverSilentlyRubles(string? value, string expected)
+    {
+        Assert.Equal(expected, ReceiptRecognitionParser.NormalizeCurrency(value));
+    }
+
+    [Fact]
+    public void NonPositiveItemsSumGoesToReceiptCategory()
+    {
+        var result = FinanceAllocation.Allocate(10m, FinanceCategory.CAFE,
+            [(FinanceCategory.GROCERIES, 100m), (FinanceCategory.OTHER, -150m)]);
+
+        Assert.Equal(10m, result[FinanceCategory.CAFE]);
+        Assert.Single(result);
+    }
+
     [Theory]
     [InlineData("1 234,50", 1234.50)]
     [InlineData("1.234,50", 1234.50)]

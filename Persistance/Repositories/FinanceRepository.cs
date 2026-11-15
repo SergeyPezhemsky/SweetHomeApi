@@ -154,6 +154,7 @@ public class FinanceRepository(SweetHomeDbContext context) : IFinanceRepository
                 x.Receipt.UserId,
                 x.Receipt.Revision,
                 x.Receipt.UploadedOn,
+                x.Receipt.PurchasedOn,
                 x.Data,
                 x.ContentType
             })
@@ -162,7 +163,7 @@ public class FinanceRepository(SweetHomeDbContext context) : IFinanceRepository
         return pending is null
             ? null
             : new FinancePendingRecognition(pending.ReceiptId, pending.UserId, pending.Revision, pending.UploadedOn,
-                pending.Data, pending.ContentType);
+                pending.PurchasedOn, pending.Data, pending.ContentType);
     }
 
     public async Task<bool> CompleteRecognitionAsync(string receiptId, int revision, FinanceRecognitionResult result, DateTime updatedAt)

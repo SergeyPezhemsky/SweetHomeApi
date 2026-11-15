@@ -276,7 +276,8 @@ public class FinanceService(
             .ToList() ?? [];
         var rules = keys.Count > 0 ? await repository.GetRulesAsync(pending.UserId, keys) : [];
 
-        var (result, failure) = BuildRecognitionResult(parsed, pending.UploadedOn, rules);
+        var (result, failure) = BuildRecognitionResult(parsed, pending.UploadedOn, rules,
+            currentDate: pending.PurchasedOn, latestDate: DateOnly.FromDateTime(UtcNow).AddDays(1));
         var raw = Truncate(modelResponse);
         if (result is null)
             return await repository.FailRecognitionAsync(pending.ReceiptId, pending.Revision, failure!.Value, raw, UtcNow);
@@ -297,10 +298,15 @@ public class FinanceService(
     /// Превращает разобранный ответ модели в данные чека: правила пользователя важнее категорий модели,
     /// итог — из чека или сумма позиций, дата — из чека, если она правдоподобна.
     /// </summary>
+    /// <param name="fallbackDate">Дата загрузки: от неё проверяется правдоподобие распознанной даты.</param>
+    /// <param name="currentDate">Текущая дата чека — остаётся, если модель дату не нашла (при повторном распознавании это может быть правка пользователя).</param>
+    /// <param name="latestDate">Самая поздняя допустимая дата (завтра по UTC), как и при ручном вводе.</param>
     public static (FinanceRecognitionResult? Result, FinanceFailureReason? Failure) BuildRecognitionResult(
         RecognizedReceipt? parsed,
         DateOnly fallbackDate,
-        IReadOnlyDictionary<string, FinanceCategory> rules)
+        IReadOnlyDictionary<string, FinanceCategory> rules,
+        DateOnly? currentDate = null,
+        DateOnly? latestDate = null)
     {
         if (parsed is null)
             return (null, FinanceFailureReason.UNREADABLE);
@@ -327,15 +333,19 @@ public class FinanceService(
             .ToList();
 
         var itemsSum = items.Sum(x => x.Amount);
-        var total = parsed.Total ?? (itemsSum is > 0 and <= FinanceDefaults.MaxAmount ? itemsSum : null);
+        // Оборванный ответ без итога: сумма уцелевших позиций — лишь часть чека, выдавать её за итог нельзя.
+        var total = parsed.Total ?? (!parsed.Repaired && itemsSum is > 0 and <= FinanceDefaults.MaxAmount ? itemsSum : null);
         if (total is null)
             return (null, FinanceFailureReason.UNREADABLE);
 
+        var latest = fallbackDate.AddDays(1);
+        if (latestDate is { } limit && limit < latest)
+            latest = limit;
         var date = parsed.Date is { } recognized
-                   && recognized <= fallbackDate.AddDays(1)
+                   && recognized <= latest
                    && recognized >= fallbackDate.AddYears(-3)
             ? recognized
-            : fallbackDate;
+            : currentDate ?? fallbackDate;
 
         return (new FinanceRecognitionResult
         {
