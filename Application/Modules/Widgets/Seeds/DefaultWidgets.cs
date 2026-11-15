@@ -72,20 +72,27 @@ public static class DefaultMainWidgets
                 Hide = false,
                 UserId = userId
             },
-            CreateWardrobeWidget(userId, 8)
+            CreateWardrobeWidget(userId, 8),
+            CreateFinanceWidget(userId, 9)
         };
     }
 
     public const string WardrobeAlias = "wardrobe";
+    public const string FinanceAlias = "finance";
 
     /// <summary>
     /// Виджеты, которые появились после первых регистраций и должны быть добавлены существующим пользователям.
     /// </summary>
-    public static IReadOnlyList<string> BackfilledAliases { get; } = [WardrobeAlias];
+    public static IReadOnlyList<string> BackfilledAliases { get; } = [WardrobeAlias, FinanceAlias];
 
     public static MainWidget? CreateBackfilledWidget(string alias, string userId, int order)
     {
-        return alias == WardrobeAlias ? CreateWardrobeWidget(userId, order) : null;
+        return alias switch
+        {
+            WardrobeAlias => CreateWardrobeWidget(userId, order),
+            FinanceAlias => CreateFinanceWidget(userId, order),
+            _ => null
+        };
     }
 
     private static MainWidget CreateWardrobeWidget(string userId, int order)
@@ -97,6 +104,21 @@ public static class DefaultMainWidgets
             Order = order,
             Name = "Гардероб",
             Icon = "checkroom",
+            Size = 2,
+            Hide = false,
+            UserId = userId
+        };
+    }
+
+    private static MainWidget CreateFinanceWidget(string userId, int order)
+    {
+        return new MainWidget
+        {
+            Id = Guid.NewGuid().ToString(),
+            Alias = FinanceAlias,
+            Order = order,
+            Name = "Финансы",
+            Icon = "account_balance_wallet",
             Size = 2,
             Hide = false,
             UserId = userId

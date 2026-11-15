@@ -11,6 +11,8 @@ using System.Text.Json.Serialization;
 using Application.Modules.HomeAssistant;
 using Application.Modules.Wardrobe;
 using Persistance;
+using Application.Modules.Finance;
+using SweetHomeApi.Infrastructure.Finance;
 using SweetHomeApi.Infrastructure.Flatlay;
 using SweetHomeApi.Infrastructure.HomeAssistant;
 using SweetHomeApi.Infrastructure.Realtime;
@@ -36,6 +38,11 @@ builder.Services.AddHttpClient<IFlatlayClient, FlatlayClient>(client => client.T
 builder.Services.AddSingleton<WardrobeImageQueue>();
 builder.Services.AddSingleton<IWardrobeImageQueue>(sp => sp.GetRequiredService<WardrobeImageQueue>());
 builder.Services.AddHostedService<WardrobeImageProcessingWorker>();
+builder.Services.Configure<ReceiptRecognitionOptions>(builder.Configuration.GetSection("Finance:Recognition"));
+builder.Services.AddHttpClient<IReceiptRecognizer, OpenAiCompatibleReceiptRecognizer>(client => client.Timeout = Timeout.InfiniteTimeSpan);
+builder.Services.AddSingleton<FinanceRecognitionQueue>();
+builder.Services.AddSingleton<IFinanceRecognitionQueue>(sp => sp.GetRequiredService<FinanceRecognitionQueue>());
+builder.Services.AddHostedService<FinanceRecognitionWorker>();
 
 // Добавляем сервисы Swagger
 builder.Services.AddEndpointsApiExplorer();
@@ -154,6 +161,7 @@ using (var scope = app.Services.CreateScope())
         ApplySmartHomeSchemaGuard(context);
         ApplyMoviesSchemaGuard(context);
         ApplyWardrobeSchemaGuard(context);
+        ApplyFinanceSchemaGuard(context);
     }
     catch (Exception ex)
     {
@@ -351,5 +359,74 @@ static void ApplyWardrobeSchemaGuard(SweetHomeDbContext context)
             ON "WardrobeItemImages" ("ProcessingStatus");
 
         CREATE SEQUENCE IF NOT EXISTS "WardrobeImageRevisionSeq" AS integer CYCLE;
+        """);
+}
+
+static void ApplyFinanceSchemaGuard(SweetHomeDbContext context)
+{
+    // Страховка на случай, если миграция AddFinance не была применена (по аналогии с Wardrobe).
+    context.Database.ExecuteSqlRaw("""
+        CREATE TABLE IF NOT EXISTS "FinanceReceipts" (
+            "Id" text NOT NULL,
+            "Source" text NOT NULL,
+            "Status" text NOT NULL,
+            "FailureReason" text NULL,
+            "PurchasedOn" date NOT NULL,
+            "Store" character varying(120) NULL,
+            "Total" numeric(12,2) NOT NULL,
+            "Currency" character varying(3) NOT NULL,
+            "Category" text NOT NULL,
+            "Note" character varying(500) NULL,
+            "HasImage" boolean NOT NULL,
+            "Revision" integer NOT NULL,
+            "RecognitionJson" text NULL,
+            "CreatedAt" timestamp with time zone NOT NULL,
+            "UpdatedAt" timestamp with time zone NOT NULL,
+            "UserId" text NOT NULL,
+            CONSTRAINT "PK_FinanceReceipts" PRIMARY KEY ("Id"),
+            CONSTRAINT "FK_FinanceReceipts_AspNetUsers_UserId" FOREIGN KEY ("UserId") REFERENCES "AspNetUsers" ("Id") ON DELETE CASCADE
+        );
+
+        CREATE INDEX IF NOT EXISTS "IX_FinanceReceipts_Status"
+            ON "FinanceReceipts" ("Status");
+
+        CREATE INDEX IF NOT EXISTS "IX_FinanceReceipts_UserId_PurchasedOn"
+            ON "FinanceReceipts" ("UserId", "PurchasedOn");
+
+        CREATE TABLE IF NOT EXISTS "FinanceReceiptItems" (
+            "Id" text NOT NULL,
+            "ReceiptId" text NOT NULL,
+            "Position" integer NOT NULL,
+            "Name" character varying(200) NOT NULL,
+            "Quantity" numeric(12,3) NULL,
+            "Price" numeric(12,2) NULL,
+            "Amount" numeric(12,2) NOT NULL,
+            "Category" text NOT NULL,
+            "CategorySource" text NOT NULL,
+            CONSTRAINT "PK_FinanceReceiptItems" PRIMARY KEY ("Id"),
+            CONSTRAINT "FK_FinanceReceiptItems_FinanceReceipts_ReceiptId" FOREIGN KEY ("ReceiptId") REFERENCES "FinanceReceipts" ("Id") ON DELETE CASCADE
+        );
+
+        CREATE INDEX IF NOT EXISTS "IX_FinanceReceiptItems_ReceiptId"
+            ON "FinanceReceiptItems" ("ReceiptId");
+
+        CREATE TABLE IF NOT EXISTS "FinanceReceiptImages" (
+            "ReceiptId" text NOT NULL,
+            "Data" bytea NOT NULL,
+            "ContentType" text NOT NULL,
+            CONSTRAINT "PK_FinanceReceiptImages" PRIMARY KEY ("ReceiptId"),
+            CONSTRAINT "FK_FinanceReceiptImages_FinanceReceipts_ReceiptId" FOREIGN KEY ("ReceiptId") REFERENCES "FinanceReceipts" ("Id") ON DELETE CASCADE
+        );
+
+        CREATE TABLE IF NOT EXISTS "FinanceCategoryRules" (
+            "UserId" text NOT NULL,
+            "Key" character varying(100) NOT NULL,
+            "Category" text NOT NULL,
+            "UpdatedAt" timestamp with time zone NOT NULL,
+            CONSTRAINT "PK_FinanceCategoryRules" PRIMARY KEY ("UserId", "Key"),
+            CONSTRAINT "FK_FinanceCategoryRules_AspNetUsers_UserId" FOREIGN KEY ("UserId") REFERENCES "AspNetUsers" ("Id") ON DELETE CASCADE
+        );
+
+        CREATE SEQUENCE IF NOT EXISTS "FinanceReceiptRevisionSeq" AS integer CYCLE;
         """);
 }

@@ -15,6 +15,13 @@ services:
       Swagger__Enabled: ${SWAGGER_ENABLED:-false}
       # Удаление фона у фото гардероба; пустое значение выключает обработку.
       Flatlay__BaseUrl: ${FLATLAY_BASE_URL-http://flatlay:8000}
+      # Распознавание чеков (вкладка «Финансы»): OpenAI-совместимый vision-провайдер, по умолчанию Yandex AI Studio.
+      # Пустой ключ выключает распознавание — фото чеков сохраняются, сумму вводят вручную.
+      Finance__Recognition__BaseUrl: ${FINANCE_LLM_BASE_URL:-https://ai.api.cloud.yandex.net/v1}
+      Finance__Recognition__ApiKey: ${FINANCE_LLM_API_KEY:-}
+      Finance__Recognition__AuthScheme: ${FINANCE_LLM_AUTH_SCHEME:-Api-Key}
+      Finance__Recognition__Project: ${FINANCE_LLM_PROJECT:-}
+      Finance__Recognition__Model: ${FINANCE_LLM_MODEL:-qwen3.6-35b-a3b}
     ports:
       - "${API_PORT:-5000}:8080"
     depends_on:

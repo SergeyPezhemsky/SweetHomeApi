@@ -1,3 +1,4 @@
+﻿using Application.Modules.Finance;
 using Application.Modules.Health;
 using Application.Modules.Movies;
 using Application.Modules.SmartHome;
@@ -154,6 +155,72 @@ public class SweetHomeDbContext(DbContextOptions<SweetHomeDbContext> options)
                 .OnDelete(DeleteBehavior.Cascade);
         });
 
+        builder.Entity<FinanceReceipt>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+
+            entity.HasIndex(e => new { e.UserId, e.PurchasedOn });
+            entity.HasIndex(e => e.Status);
+
+            entity.Property(e => e.Source).HasConversion<string>();
+            entity.Property(e => e.Status).HasConversion<string>();
+            entity.Property(e => e.FailureReason).HasConversion<string>();
+            entity.Property(e => e.Category).HasConversion<string>();
+            entity.Property(e => e.Total).HasPrecision(12, 2);
+            entity.Property(e => e.Currency).HasMaxLength(3);
+            entity.Property(e => e.Store).HasMaxLength(FinanceDefaults.MaxStoreLength);
+            entity.Property(e => e.Note).HasMaxLength(FinanceDefaults.MaxNoteLength);
+
+            entity
+                .HasMany(e => e.Items)
+                .WithOne(e => e.Receipt)
+                .HasForeignKey(e => e.ReceiptId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity
+                .HasOne(e => e.User)
+                .WithMany()
+                .HasForeignKey(e => e.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<FinanceReceiptItem>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.HasIndex(e => e.ReceiptId);
+
+            entity.Property(e => e.Name).HasMaxLength(FinanceDefaults.MaxItemNameLength);
+            entity.Property(e => e.Quantity).HasPrecision(12, 3);
+            entity.Property(e => e.Price).HasPrecision(12, 2);
+            entity.Property(e => e.Amount).HasPrecision(12, 2);
+            entity.Property(e => e.Category).HasConversion<string>();
+            entity.Property(e => e.CategorySource).HasConversion<string>();
+        });
+
+        builder.Entity<FinanceReceiptImage>(entity =>
+        {
+            entity.HasKey(e => e.ReceiptId);
+
+            entity
+                .HasOne(e => e.Receipt)
+                .WithOne()
+                .HasForeignKey<FinanceReceiptImage>(e => e.ReceiptId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<FinanceCategoryRule>(entity =>
+        {
+            entity.HasKey(e => new { e.UserId, e.Key });
+            entity.Property(e => e.Key).HasMaxLength(100);
+            entity.Property(e => e.Category).HasConversion<string>();
+
+            entity
+                .HasOne(e => e.User)
+                .WithMany()
+                .HasForeignKey(e => e.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
         builder.Entity<SmartHomeRoom>(entity =>
         {
             entity.HasKey(e => e.Id);
@@ -240,4 +307,8 @@ public class SweetHomeDbContext(DbContextOptions<SweetHomeDbContext> options)
     public DbSet<WardrobeItem> WardrobeItems { get; set; }
     public DbSet<WardrobeItemImage> WardrobeItemImages { get; set; }
     public DbSet<WardrobeOutfit> WardrobeOutfits { get; set; }
+    public DbSet<FinanceReceipt> FinanceReceipts { get; set; }
+    public DbSet<FinanceReceiptItem> FinanceReceiptItems { get; set; }
+    public DbSet<FinanceReceiptImage> FinanceReceiptImages { get; set; }
+    public DbSet<FinanceCategoryRule> FinanceCategoryRules { get; set; }
 }
