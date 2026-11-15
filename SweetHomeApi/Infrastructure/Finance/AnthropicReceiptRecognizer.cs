@@ -24,7 +24,7 @@ public class AnthropicReceiptRecognizer(HttpClient httpClient, IOptions<Anthropi
             throw new ReceiptRecognizerException("Anthropic recognition is not configured");
 
         // temperature не передаём: Claude Haiku 5.5 возвращает ошибку на temperature/top_p/top_k (breaking change).
-        // Рассуждения для извлечения полей не нужны — выключаем: дешевле, быстрее, токены ответа не уходят на thinking.
+        // Рассуждения для извлечения полей не нужны — выбираем самый «тихий» режим, который принимает модель.
         var payload = new Dictionary<string, object>
         {
             ["model"] = Model,
@@ -32,8 +32,10 @@ public class AnthropicReceiptRecognizer(HttpClient httpClient, IOptions<Anthropi
             ["system"] = ReceiptRecognitionPrompt.System,
             ["messages"] = BuildMessages(image, contentType)
         };
-        if (settings.DisableThinking)
-            payload["thinking"] = new { type = "disabled" };
+        if (settings.ResolveThinking() is { } thinking)
+            payload["thinking"] = new { type = thinking };
+        if (!string.IsNullOrWhiteSpace(settings.Effort))
+            payload["output_config"] = new { effort = settings.Effort.Trim().ToLowerInvariant() };
 
         using var request = new HttpRequestMessage(HttpMethod.Post, $"{settings.BaseUrl.TrimEnd('/')}/v1/messages");
         request.Headers.TryAddWithoutValidation("x-api-key", settings.ApiKey!.Trim());

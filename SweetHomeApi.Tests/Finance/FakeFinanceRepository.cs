@@ -59,6 +59,8 @@ internal sealed class FakeFinanceRepository : IFinanceRepository
         receipt.Currency = update.Currency;
         receipt.Category = update.Category;
         receipt.Note = update.Note;
+        if (receipt.Status != FinanceReceiptStatus.READY)
+            receipt.RecognitionModel = null;
         receipt.Status = FinanceReceiptStatus.READY;
         receipt.FailureReason = null;
         receipt.Revision = revision;
@@ -148,7 +150,7 @@ internal sealed class FakeFinanceRepository : IFinanceRepository
 
         receipt.Status = FinanceReceiptStatus.FAILED;
         receipt.FailureReason = reason;
-        receipt.RecognitionJson = rawJson ?? receipt.RecognitionJson;
+        receipt.RecognitionJson = rawJson;
         receipt.RecognitionModel = model;
         receipt.UpdatedAt = updatedAt;
         return Task.FromResult(true);

@@ -83,6 +83,9 @@ public class FinanceRepository(SweetHomeDbContext context) : IFinanceRepository
                 .SetProperty(x => x.Note, update.Note)
                 .SetProperty(x => x.Status, FinanceReceiptStatus.READY)
                 .SetProperty(x => x.FailureReason, (FinanceFailureReason?)null)
+                // Модель остаётся, только если она действительно прочитала чек (READY); нераспознанный или ещё
+                // распознаваемый чек, заполненный руками, — заслуга пользователя, а не модели.
+                .SetProperty(x => x.RecognitionModel, x => x.Status == FinanceReceiptStatus.READY ? x.RecognitionModel : null)
                 .SetProperty(x => x.Revision, revision)
                 .SetProperty(x => x.UpdatedAt, updatedAt));
         if (updated == 0)
@@ -203,8 +206,8 @@ public class FinanceRepository(SweetHomeDbContext context) : IFinanceRepository
             .ExecuteUpdateAsync(setters => setters
                 .SetProperty(x => x.Status, FinanceReceiptStatus.FAILED)
                 .SetProperty(x => x.FailureReason, reason)
-                .SetProperty(x => x.RecognitionJson, x => rawJson ?? x.RecognitionJson)
-                // Модель — та, что пыталась сейчас; никто не ответил — очищаем, чтобы не показывать прошлую.
+                // Ответ и модель — от этой попытки; никто не ответил — оба пустые, чтобы не приписать старый ответ.
+                .SetProperty(x => x.RecognitionJson, rawJson)
                 .SetProperty(x => x.RecognitionModel, model)
                 .SetProperty(x => x.UpdatedAt, updatedAt));
 

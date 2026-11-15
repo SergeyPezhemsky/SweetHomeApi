@@ -144,6 +144,56 @@ public class FinanceProvidersTests
         Assert.Equal(expected, OpenAiCompatibleReceiptRecognizer.StripFolder(configured));
     }
 
+    [Theory]
+    [InlineData("claude-haiku-5-5", "auto", "disabled")]
+    [InlineData("claude-sonnet-5-5", "auto", "between_tools")]
+    [InlineData("claude-opus-5-5", "auto", null)]
+    [InlineData("claude-opus-5-5", "adaptive", "adaptive")]
+    [InlineData("claude-haiku-5-5", "omit", null)]
+    public void ThinkingModeDependsOnModel(string model, string mode, string? expected)
+    {
+        Assert.Equal(expected, new AnthropicRecognitionOptions { Model = model, Thinking = mode }.ResolveThinking());
+    }
+
+    [Fact]
+    public async Task OpusRequestOmitsThinkingAndSendsEffort()
+    {
+        string? body = null;
+        var recognizer = new AnthropicReceiptRecognizer(new HttpClient(new StubHandler(async request =>
+        {
+            body = await request.Content!.ReadAsStringAsync();
+            return Json(HttpStatusCode.OK, """{"content":[{"type":"thinking","thinking":""},{"type":"text","text":"{}"}]}""");
+        })), Options.Create(new AnthropicRecognitionOptions { ApiKey = "k", Model = "claude-opus-5-5", Effort = "Low" }));
+
+        Assert.Equal("{}", await recognizer.RecognizeAsync([1], "image/png", CancellationToken.None));
+
+        using var json = JsonDocument.Parse(body!);
+        Assert.False(json.RootElement.TryGetProperty("thinking", out _));
+        Assert.Equal("low", json.RootElement.GetProperty("output_config").GetProperty("effort").GetString());
+    }
+
+    [Fact]
+    public async Task ManualFillOfFailedReceiptDropsModelAttribution()
+    {
+        var (repository, receipt) = await UploadAsync();
+        await CreateWorker(repository, [new FakeRecognizer(_ => Task.FromResult("мусор"), "openai", "qwen")])
+            .ProcessAsync(receipt.Id, CancellationToken.None);
+        Assert.Equal("qwen", repository.Receipts[receipt.Id].RecognitionModel);
+
+        var service = new FinanceService(repository, new FakeRecognitionQueue(enabled: true));
+        var updated = await service.UpdateReceiptAsync(UserId, receipt.Id,
+            new FinanceReceiptUpdate { PurchasedOn = Today, Total = 10, Category = FinanceCategory.CAFE });
+
+        Assert.Null(updated!.RecognitionModel);
+    }
+
+    [Fact]
+    public void YandexFolderWarningOnlyWhenYandexIsConfigured()
+    {
+        Assert.False(new ReceiptRecognitionOptions().MissingYandexFolder);
+        Assert.True(new ReceiptRecognitionOptions { ApiKey = "k" }.MissingYandexFolder);
+    }
+
     [Fact]
     public void QueueIsEnabledByAnyListedProvider()
     {

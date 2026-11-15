@@ -13,7 +13,7 @@ public class AnthropicRecognitionOptions
 
     public string? ApiKey { get; set; }
 
-    /// <summary>Haiku — дешёвый и достаточный для чеков; claude-sonnet-5-5 — точнее и примерно в 10–20 раз дороже.</summary>
+    /// <summary>Haiku — дешёвый и достаточный для чеков; claude-sonnet-5-5 точнее и дороже (оценка по прайсу — в 10–20 раз).</summary>
     public string Model { get; set; } = "claude-haiku-5-5";
 
     public string ApiVersion { get; set; } = "2023-06-01";
@@ -28,8 +28,33 @@ public class AnthropicRecognitionOptions
 
     public int MaxTokens { get; set; } = 12000;
 
-    /// <summary>Выключить adaptive thinking (по умолчанию у Haiku 5.5 включён и тратит оплачиваемые токены из max_tokens).</summary>
-    public bool DisableThinking { get; set; } = true;
+    /// <summary>
+    /// Режим рассуждений: auto (по модели), disabled, between_tools, adaptive. Модели 5.5 различаются:
+    /// Haiku принимает disabled, Sonnet — только between_tools (disabled → 400), у Opus рассуждения всегда включены
+    /// (disabled → 400, поле не передаём). auto выбирает самый «тихий» допустимый режим: для извлечения полей рассуждения не нужны,
+    /// а их оплачиваемые токены идут из max_tokens.
+    /// </summary>
+    public string Thinking { get; set; } = "auto";
+
+    /// <summary>Глубина рассуждений (output_config.effort): low / medium / high. Пусто — по умолчанию модели.</summary>
+    public string? Effort { get; set; }
+
+    /// <summary>Значение поля thinking для запроса; null — поле не передаём.</summary>
+    public string? ResolveThinking()
+    {
+        var mode = (Thinking ?? "auto").Trim().ToLowerInvariant();
+        if (mode is "disabled" or "between_tools" or "adaptive")
+            return mode;
+        if (mode is "omit" or "none" or "")
+            return null;
+
+        var model = (Model ?? string.Empty).ToLowerInvariant();
+        if (model.Contains("haiku", StringComparison.Ordinal))
+            return "disabled";
+        if (model.Contains("sonnet", StringComparison.Ordinal))
+            return "between_tools";
+        return null;
+    }
 
     public int MaxResponseBytes { get; set; } = 2 * 1024 * 1024;
 

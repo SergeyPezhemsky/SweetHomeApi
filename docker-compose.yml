@@ -28,6 +28,8 @@ services:
       Finance__Recognition__Anthropic__ApiKey: ${FINANCE_ANTHROPIC_API_KEY:-}
       Finance__Recognition__Anthropic__Model: ${FINANCE_ANTHROPIC_MODEL:-claude-haiku-5-5}
       Finance__Recognition__Anthropic__ProxyUrl: ${FINANCE_ANTHROPIC_PROXY:-}
+      Finance__Recognition__Anthropic__Thinking: ${FINANCE_ANTHROPIC_THINKING:-auto}
+      Finance__Recognition__Anthropic__Effort: ${FINANCE_ANTHROPIC_EFFORT:-}
     ports:
       - "${API_PORT:-5000}:8080"
     depends_on:

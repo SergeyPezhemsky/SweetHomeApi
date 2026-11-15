@@ -48,7 +48,8 @@ public class ReceiptRecognitionOptions
                              && !MissingYandexFolder;
 
     /// <summary>Yandex AI Studio без идентификатора каталога отклоняет каждый запрос — это ошибка настройки, а не сбой.</summary>
-    public bool MissingYandexFolder => Uri.TryCreate(BaseUrl, UriKind.Absolute, out var uri)
+    public bool MissingYandexFolder => !string.IsNullOrWhiteSpace(ApiKey)
+                                       && Uri.TryCreate(BaseUrl, UriKind.Absolute, out var uri)
                                        && uri.Host.EndsWith("yandex.net", StringComparison.OrdinalIgnoreCase)
                                        && string.IsNullOrWhiteSpace(Project)
                                        && !(Model ?? string.Empty).Contains("://", StringComparison.Ordinal);
