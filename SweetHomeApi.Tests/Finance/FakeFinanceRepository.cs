@@ -149,7 +149,7 @@ internal sealed class FakeFinanceRepository : IFinanceRepository
         receipt.Status = FinanceReceiptStatus.FAILED;
         receipt.FailureReason = reason;
         receipt.RecognitionJson = rawJson ?? receipt.RecognitionJson;
-        receipt.RecognitionModel = model ?? receipt.RecognitionModel;
+        receipt.RecognitionModel = model;
         receipt.UpdatedAt = updatedAt;
         return Task.FromResult(true);
     }

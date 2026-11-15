@@ -23,29 +23,17 @@ public class AnthropicReceiptRecognizer(HttpClient httpClient, IOptions<Anthropi
         if (!settings.IsEnabled)
             throw new ReceiptRecognizerException("Anthropic recognition is not configured");
 
-        var payload = new
+        // temperature не передаём: Claude Haiku 5.5 возвращает ошибку на temperature/top_p/top_k (breaking change).
+        // Рассуждения для извлечения полей не нужны — выключаем: дешевле, быстрее, токены ответа не уходят на thinking.
+        var payload = new Dictionary<string, object>
         {
-            model = Model,
-            max_tokens = settings.MaxTokens,
-            temperature = 0,
-            system = ReceiptRecognitionPrompt.System,
-            messages = new object[]
-            {
-                new
-                {
-                    role = "user",
-                    content = new object[]
-                    {
-                        new
-                        {
-                            type = "image",
-                            source = new { type = "base64", media_type = contentType, data = Convert.ToBase64String(image) }
-                        },
-                        new { type = "text", text = ReceiptRecognitionPrompt.User }
-                    }
-                }
-            }
+            ["model"] = Model,
+            ["max_tokens"] = settings.MaxTokens,
+            ["system"] = ReceiptRecognitionPrompt.System,
+            ["messages"] = BuildMessages(image, contentType)
         };
+        if (settings.DisableThinking)
+            payload["thinking"] = new { type = "disabled" };
 
         using var request = new HttpRequestMessage(HttpMethod.Post, $"{settings.BaseUrl.TrimEnd('/')}/v1/messages");
         request.Headers.TryAddWithoutValidation("x-api-key", settings.ApiKey!.Trim());
@@ -85,7 +73,27 @@ public class AnthropicReceiptRecognizer(HttpClient httpClient, IOptions<Anthropi
                ?? throw new ReceiptRecognizerException($"Anthropic returned no text content: {ProviderHttp.Shorten(body)}");
     }
 
-    /// <summary>Текст ответа: все блоки content с type = "text" подряд.</summary>
+    private static object[] BuildMessages(byte[] image, string contentType)
+    {
+        return
+        [
+            new
+            {
+                role = "user",
+                content = new object[]
+                {
+                    new
+                    {
+                        type = "image",
+                        source = new { type = "base64", media_type = contentType, data = Convert.ToBase64String(image) }
+                    },
+                    new { type = "text", text = ReceiptRecognitionPrompt.User }
+                }
+            }
+        ];
+    }
+
+    /// <summary>Текст ответа: все блоки content с type = "text" подряд (блоки thinking пропускаются).</summary>
     public static string? ExtractText(string body)
     {
         try

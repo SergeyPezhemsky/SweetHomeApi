@@ -14,7 +14,20 @@ public class OpenAiCompatibleReceiptRecognizer(HttpClient httpClient, IOptions<R
 
     public string Provider => ProviderName;
 
-    public string Model => options.Value.IsEnabled ? options.Value.ResolveModel() : options.Value.Model ?? string.Empty;
+    /// <summary>Модель без «gpt://&lt;каталог&gt;/»: каталог Yandex — деталь настройки, в чеке и API он не нужен.</summary>
+    public string Model => StripFolder(options.Value.Model ?? string.Empty);
+
+    public static string StripFolder(string model)
+    {
+        model = model.Trim();
+        var scheme = model.IndexOf("://", StringComparison.Ordinal);
+        if (scheme < 0)
+            return model;
+
+        var rest = model[(scheme + 3)..];
+        var slash = rest.IndexOf('/');
+        return slash >= 0 ? rest[(slash + 1)..] : rest;
+    }
 
     public bool IsEnabled => options.Value.IsEnabled;
 

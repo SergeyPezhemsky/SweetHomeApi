@@ -29,6 +29,10 @@ public class FinanceRecognitionWorker(
             return;
         }
 
+        // Yandex без каталога пропускается молча, если работает другой провайдер, — предупредим при старте.
+        if (options.Value.MissingYandexFolder && RecognizerOrder.Includes(options.Value.Order, OpenAiCompatibleReceiptRecognizer.ProviderName))
+            logger.LogWarning("Yandex recognition is skipped: Finance:Recognition:Project (Yandex folder id) is empty");
+
         await EnqueuePendingAsync(stoppingToken);
 
         await foreach (var receiptId in queue.Reader.ReadAllAsync(stoppingToken))
@@ -156,6 +160,10 @@ public class FinanceRecognitionWorker(
             failure = reason!.Value;
             failedResponse = attempt.Response;
             failedModel = recognizer.Model;
+
+            // Пока первый провайдер думал, чек могли удалить или заполнить вручную — тогда фото дальше не отправляем.
+            if (recognizer != recognizers[^1] && !await StillPendingAsync(repository, pending, stoppingToken))
+                return;
         }
 
         await FailSafelyAsync(service, pending, failure, failedResponse, failedModel, stoppingToken);

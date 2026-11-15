@@ -28,6 +28,9 @@ public class AnthropicRecognitionOptions
 
     public int MaxTokens { get; set; } = 12000;
 
+    /// <summary>Выключить adaptive thinking (по умолчанию у Haiku 5.5 включён и тратит оплачиваемые токены из max_tokens).</summary>
+    public bool DisableThinking { get; set; } = true;
+
     public int MaxResponseBytes { get; set; } = 2 * 1024 * 1024;
 
     public bool IsEnabled => !string.IsNullOrWhiteSpace(ApiKey)

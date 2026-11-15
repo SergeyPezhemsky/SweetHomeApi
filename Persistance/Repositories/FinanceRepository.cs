@@ -204,7 +204,8 @@ public class FinanceRepository(SweetHomeDbContext context) : IFinanceRepository
                 .SetProperty(x => x.Status, FinanceReceiptStatus.FAILED)
                 .SetProperty(x => x.FailureReason, reason)
                 .SetProperty(x => x.RecognitionJson, x => rawJson ?? x.RecognitionJson)
-                .SetProperty(x => x.RecognitionModel, x => model ?? x.RecognitionModel)
+                // Модель — та, что пыталась сейчас; никто не ответил — очищаем, чтобы не показывать прошлую.
+                .SetProperty(x => x.RecognitionModel, model)
                 .SetProperty(x => x.UpdatedAt, updatedAt));
 
         await transaction.CommitAsync();

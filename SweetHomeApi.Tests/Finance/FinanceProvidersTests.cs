@@ -119,6 +119,32 @@ public class FinanceProvidersTests
     }
 
     [Fact]
+    public async Task DeletedReceiptIsNotSentToNextProvider()
+    {
+        var (repository, receipt) = await UploadAsync();
+        var service = new FinanceService(repository, new FakeRecognitionQueue(enabled: true));
+        var yandex = new FakeRecognizer(async _ =>
+        {
+            await service.DeleteReceiptAsync(UserId, receipt.Id);
+            return "не могу прочитать";
+        }, "openai");
+        var claude = new FakeRecognizer(_ => Task.FromResult(Receipt), "anthropic");
+
+        await CreateWorker(repository, [yandex, claude]).ProcessAsync(receipt.Id, CancellationToken.None);
+
+        Assert.Equal(0, claude.Calls);
+    }
+
+    [Theory]
+    [InlineData("gpt://b1gfolder/qwen3-235b-a22b-fp8/latest", "qwen3-235b-a22b-fp8/latest")]
+    [InlineData("gpt://b1gfolder/qwen3.6-35b-a3b", "qwen3.6-35b-a3b")]
+    [InlineData("qwen3.6-35b-a3b", "qwen3.6-35b-a3b")]
+    public void ModelIsStoredWithoutYandexFolder(string configured, string expected)
+    {
+        Assert.Equal(expected, OpenAiCompatibleReceiptRecognizer.StripFolder(configured));
+    }
+
+    [Fact]
     public void QueueIsEnabledByAnyListedProvider()
     {
         var anthropicOnly = new FinanceRecognitionQueue(Options.Create(new ReceiptRecognitionOptions()),
@@ -174,6 +200,9 @@ public class FinanceProvidersTests
         Assert.Equal("image/jpeg", image.GetProperty("source").GetProperty("media_type").GetString());
         Assert.Equal("AQID", image.GetProperty("source").GetProperty("data").GetString());
         Assert.False(string.IsNullOrWhiteSpace(json.RootElement.GetProperty("system").GetString()));
+        // Haiku 5.5 отклоняет temperature/top_p/top_k; рассуждения выключены.
+        Assert.False(json.RootElement.TryGetProperty("temperature", out _));
+        Assert.Equal("disabled", json.RootElement.GetProperty("thinking").GetProperty("type").GetString());
     }
 
     [Theory]
