@@ -12,6 +12,12 @@ public interface IFinanceRecognitionQueue
 /// <summary>Vision-модель, читающая чек. Возвращает сырой текст ответа модели.</summary>
 public interface IReceiptRecognizer
 {
+    /// <summary>Имя провайдера в настройке порядка: «openai» (OpenAI-совместимый, Yandex) или «anthropic».</summary>
+    string Provider { get; }
+
+    /// <summary>Модель, которая читает чек: сохраняется в чеке, чтобы сравнивать качество провайдеров.</summary>
+    string Model { get; }
+
     bool IsEnabled { get; }
 
     /// <summary>

@@ -77,6 +77,10 @@ namespace Persistance.Migrations
                     b.Property<string>("RecognitionJson")
                         .HasColumnType("text");
 
+                    b.Property<string>("RecognitionModel")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
                     b.Property<int>("Revision")
                         .HasColumnType("integer");
 

@@ -17,8 +17,16 @@ public interface IFinanceService
     Task<FinanceReceiptImage?> GetImageAsync(string userId, string receiptId);
     Task<FinanceMonthSummary> GetSummaryAsync(string userId, FinanceMonth month);
 
-    /// <summary>Разбирает ответ модели и сохраняет результат для этой ревизии (вызывается воркером).</summary>
-    Task<bool> CompleteRecognitionAsync(FinancePendingRecognition pending, string modelResponse);
+    /// <summary>Разбирает ответ модели (с правилами пользователя), ничего не сохраняя: воркер решает, звать ли следующего провайдера.</summary>
+    Task<(FinanceRecognitionResult? Result, FinanceFailureReason? Failure)> EvaluateRecognitionAsync(
+        FinancePendingRecognition pending, string modelResponse, string? model = null);
 
-    Task<bool> FailRecognitionAsync(FinancePendingRecognition pending, FinanceFailureReason reason, string? rawResponse = null);
+    /// <summary>Сохраняет результат для этой ревизии. False — чек изменился или удалён.</summary>
+    Task<bool> SaveRecognitionAsync(FinancePendingRecognition pending, FinanceRecognitionResult result);
+
+    /// <summary>Разбирает ответ модели и сохраняет результат (или причину неудачи) для этой ревизии.</summary>
+    Task<bool> CompleteRecognitionAsync(FinancePendingRecognition pending, string modelResponse, string? model = null);
+
+    Task<bool> FailRecognitionAsync(FinancePendingRecognition pending, FinanceFailureReason reason, string? rawResponse = null,
+        string? model = null);
 }

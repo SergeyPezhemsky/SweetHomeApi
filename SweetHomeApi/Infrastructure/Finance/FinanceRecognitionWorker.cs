@@ -23,7 +23,7 @@ public class FinanceRecognitionWorker(
             if (options.Value.MissingYandexFolder)
                 logger.LogWarning("Receipt recognition is disabled: Finance:Recognition:Project (Yandex folder id) is empty");
             else
-                logger.LogInformation("Receipt recognition is disabled (Finance:Recognition:ApiKey or Model is empty)");
+                logger.LogInformation("Receipt recognition is disabled: no provider from Finance:Recognition:Order is configured");
             // Чеки, оставшиеся в очереди с прошлого запуска, иначе висели бы в PENDING навсегда.
             await FailPendingAsync(stoppingToken);
             return;
@@ -93,7 +93,7 @@ public class FinanceRecognitionWorker(
         using var scope = scopeFactory.CreateScope();
         var repository = scope.ServiceProvider.GetRequiredService<IFinanceRepository>();
         var service = scope.ServiceProvider.GetRequiredService<IFinanceService>();
-        var recognizer = scope.ServiceProvider.GetRequiredService<IReceiptRecognizer>();
+        var recognizers = RecognizerOrder.Arrange(scope.ServiceProvider.GetServices<IReceiptRecognizer>(), options.Value.Order);
 
         FinancePendingRecognition? pending;
         try
@@ -111,26 +111,61 @@ public class FinanceRecognitionWorker(
         if (pending is null)
             return;
 
-        var response = await RecognizeAsync(recognizer, repository, service, pending, stoppingToken);
-        if (response is null)
+        if (recognizers.Count == 0)
+        {
+            await FailSafelyAsync(service, pending, FinanceFailureReason.DISABLED, null, null, stoppingToken);
             return;
+        }
 
-        try
+        // Провайдеры по порядку: следующий зовём, если предыдущий недоступен или не смог прочитать чек.
+        // Итоговая причина неудачи — от последнего провайдера, который ответил; если не ответил никто — PROVIDER_ERROR.
+        var failure = FinanceFailureReason.PROVIDER_ERROR;
+        string? failedResponse = null;
+        string? failedModel = null;
+        foreach (var recognizer in recognizers)
         {
-            var saved = await service.CompleteRecognitionAsync(pending, response);
-            if (!saved)
-                logger.LogInformation("Receipt {ReceiptId} changed during recognition; result discarded", receiptId);
+            var attempt = await RecognizeAsync(recognizer, repository, pending, stoppingToken);
+            if (attempt.Stop)
+                return;
+            if (attempt.Response is null)
+                continue;
+
+            FinanceRecognitionResult? result;
+            FinanceFailureReason? reason;
+            try
+            {
+                (result, reason) = await service.EvaluateRecognitionAsync(pending, attempt.Response, recognizer.Model);
+                if (result is not null)
+                {
+                    var saved = await service.SaveRecognitionAsync(pending, result);
+                    if (!saved)
+                        logger.LogInformation("Receipt {ReceiptId} changed during recognition; result discarded", receiptId);
+                    return;
+                }
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException || !stoppingToken.IsCancellationRequested)
+            {
+                // Ответ модели есть, но обработать или сохранить его не вышло — это не вина провайдера.
+                logger.LogError(ex, "Failed to save recognition result for receipt {ReceiptId}", receiptId);
+                await FailSafelyAsync(service, pending, FinanceFailureReason.INTERNAL_ERROR, attempt.Response, recognizer.Model,
+                    stoppingToken);
+                return;
+            }
+
+            logger.LogInformation("{Provider} could not read receipt {ReceiptId}: {Reason}", recognizer.Provider, receiptId, reason);
+            failure = reason!.Value;
+            failedResponse = attempt.Response;
+            failedModel = recognizer.Model;
         }
-        catch (Exception ex) when (ex is not OperationCanceledException || !stoppingToken.IsCancellationRequested)
-        {
-            // Ответ модели есть, но сохранить его не вышло — это не вина провайдера.
-            logger.LogError(ex, "Failed to save recognition result for receipt {ReceiptId}", receiptId);
-            await FailSafelyAsync(service, pending, FinanceFailureReason.INTERNAL_ERROR, response, stoppingToken);
-        }
+
+        await FailSafelyAsync(service, pending, failure, failedResponse, failedModel, stoppingToken);
     }
 
-    /// <summary>Ответ модели или null, если чек уже помечен FAILED (или изменился и ждать нечего).</summary>
-    private async Task<string?> RecognizeAsync(IReceiptRecognizer recognizer, IFinanceRepository repository, IFinanceService service,
+    /// <summary>
+    /// Ответ одного провайдера с повторами при временной недоступности.
+    /// Response = null — провайдер не ответил (можно звать следующего); Stop — чек изменился или отложен, дальше не идём.
+    /// </summary>
+    private async Task<(string? Response, bool Stop)> RecognizeAsync(IReceiptRecognizer recognizer, IFinanceRepository repository,
         FinancePendingRecognition pending, CancellationToken stoppingToken)
     {
         var attempts = Math.Max(1, options.Value.Retries + 1);
@@ -138,48 +173,52 @@ public class FinanceRecognitionWorker(
         {
             try
             {
-                return await recognizer.RecognizeAsync(pending.Data, pending.ContentType, stoppingToken);
+                return (await recognizer.RecognizeAsync(pending.Data, pending.ContentType, stoppingToken), false);
             }
             catch (ReceiptRecognizerUnavailableException ex) when (attempt < attempts)
             {
                 // Провайдер временно недоступен (сеть, 429, 5xx) — подождём и повторим, если чек ещё ждёт.
-                logger.LogWarning(ex, "Recognition provider unavailable (attempt {Attempt}/{Attempts}) for {ReceiptId}",
-                    attempt, attempts, pending.ReceiptId);
+                logger.LogWarning(ex, "{Provider} unavailable (attempt {Attempt}/{Attempts}) for {ReceiptId}",
+                    recognizer.Provider, attempt, attempts, pending.ReceiptId);
                 await Task.Delay(TimeSpan.FromSeconds(Math.Max(0, options.Value.RetryDelaySeconds) * attempt), stoppingToken);
 
-                FinancePendingRecognition? current;
-                try
-                {
-                    current = await repository.GetPendingRecognitionAsync(pending.ReceiptId);
-                }
-                catch (Exception dbError) when (dbError is not OperationCanceledException || !stoppingToken.IsCancellationRequested)
-                {
-                    // База недоступна между попытками — чек остаётся PENDING, вернёмся к нему позже.
-                    logger.LogError(dbError, "Failed to re-check receipt {ReceiptId} before retry", pending.ReceiptId);
-                    RequeueLater(pending.ReceiptId, stoppingToken);
-                    return null;
-                }
-
-                if (current is null || current.Revision != pending.Revision)
-                    return null;
+                if (!await StillPendingAsync(repository, pending, stoppingToken))
+                    return (null, true);
             }
             catch (Exception ex) when (ex is not OperationCanceledException || !stoppingToken.IsCancellationRequested)
             {
-                logger.LogWarning(ex, "Recognition failed for receipt {ReceiptId}", pending.ReceiptId);
-                await FailSafelyAsync(service, pending, FinanceFailureReason.PROVIDER_ERROR, null, stoppingToken);
-                return null;
+                logger.LogWarning(ex, "{Provider} failed to recognize receipt {ReceiptId}", recognizer.Provider, pending.ReceiptId);
+                // Перед следующим провайдером убеждаемся, что чек ещё ждёт: его могли отредактировать или удалить.
+                return await StillPendingAsync(repository, pending, stoppingToken) ? (null, false) : (null, true);
             }
         }
 
-        return null;
+        return (null, false);
     }
 
-    private async Task FailSafelyAsync(IFinanceService service, FinancePendingRecognition pending, FinanceFailureReason reason,
-        string? response, CancellationToken stoppingToken)
+    /// <summary>Чек всё ещё ждёт эту ревизию. При ошибке базы — откладываем чек и говорим «нет».</summary>
+    private async Task<bool> StillPendingAsync(IFinanceRepository repository, FinancePendingRecognition pending, CancellationToken stoppingToken)
     {
         try
         {
-            await service.FailRecognitionAsync(pending, reason, response);
+            var current = await repository.GetPendingRecognitionAsync(pending.ReceiptId);
+            return current is not null && current.Revision == pending.Revision;
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException || !stoppingToken.IsCancellationRequested)
+        {
+            // База недоступна между попытками — чек остаётся PENDING, вернёмся к нему позже.
+            logger.LogError(ex, "Failed to re-check receipt {ReceiptId}", pending.ReceiptId);
+            RequeueLater(pending.ReceiptId, stoppingToken);
+            return false;
+        }
+    }
+
+    private async Task FailSafelyAsync(IFinanceService service, FinancePendingRecognition pending, FinanceFailureReason reason,
+        string? response, string? model, CancellationToken stoppingToken)
+    {
+        try
+        {
+            await service.FailRecognitionAsync(pending, reason, response, model);
         }
         catch (Exception ex) when (ex is not OperationCanceledException || !stoppingToken.IsCancellationRequested)
         {

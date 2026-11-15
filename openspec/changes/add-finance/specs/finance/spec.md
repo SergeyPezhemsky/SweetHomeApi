@@ -36,6 +36,14 @@ The worker SHALL fill store, date, currency, total, receipt category and items f
 - WHEN a new receipt contains «Корм Purina для щенков 3 кг» recognized as `GROCERIES`
 - THEN the item gets category `PETS` with `categorySource = RULE` (same key «корм purina»).
 
+### Requirement: Provider fallback
+The worker SHALL try configured providers in `Finance:Recognition:Order`; when a provider fails or cannot read the receipt, the next provider SHALL be tried, and the receipt SHALL record the model that produced the stored answer in `recognitionModel`.
+
+#### Scenario: Yandex cannot read, Claude can
+- GIVEN order `openai,anthropic` and both providers configured
+- WHEN the OpenAI-compatible provider answers without a JSON receipt and Anthropic answers with a valid receipt
+- THEN the receipt is `READY` with Anthropic's data and `recognitionModel` = the Anthropic model.
+
 ### Requirement: Manual receipt
 `POST api/v1/finance/receipts/manual` with `{ total, category, purchasedOn?, store?, note? }` SHALL create a `READY` receipt without items and photo. `total` 0.01..10 000 000, category known, store ≤ 120, note ≤ 500, `purchasedOn` from 2000-01-01 to tomorrow (UTC) — the same date rule applies to upload and editing.
 

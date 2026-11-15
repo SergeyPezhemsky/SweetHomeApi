@@ -133,12 +133,14 @@ internal sealed class FakeFinanceRepository : IFinanceRepository
         receipt.Status = FinanceReceiptStatus.READY;
         receipt.FailureReason = null;
         receipt.RecognitionJson = result.RawJson;
+        receipt.RecognitionModel = result.Model;
         receipt.UpdatedAt = updatedAt;
         receipt.Items = result.Items.Select(CloneItem).ToList();
         return Task.FromResult(true);
     }
 
-    public Task<bool> FailRecognitionAsync(string receiptId, int revision, FinanceFailureReason reason, string? rawJson, DateTime updatedAt)
+    public Task<bool> FailRecognitionAsync(string receiptId, int revision, FinanceFailureReason reason, string? rawJson, string? model,
+        DateTime updatedAt)
     {
         if (!Receipts.TryGetValue(receiptId, out var receipt) || receipt.Revision != revision
             || receipt.Status != FinanceReceiptStatus.PENDING)
@@ -147,6 +149,7 @@ internal sealed class FakeFinanceRepository : IFinanceRepository
         receipt.Status = FinanceReceiptStatus.FAILED;
         receipt.FailureReason = reason;
         receipt.RecognitionJson = rawJson ?? receipt.RecognitionJson;
+        receipt.RecognitionModel = model ?? receipt.RecognitionModel;
         receipt.UpdatedAt = updatedAt;
         return Task.FromResult(true);
     }
@@ -198,10 +201,13 @@ internal sealed class FakeRecognitionQueue(bool enabled) : IFinanceRecognitionQu
     public void Enqueue(string receiptId) => Items.Add(receiptId);
 }
 
-internal sealed class FakeRecognizer(Func<int, Task<string>> respond) : IReceiptRecognizer
+internal sealed class FakeRecognizer(Func<int, Task<string>> respond, string provider = "openai", string model = "fake-model",
+    bool enabled = true) : IReceiptRecognizer
 {
     public int Calls { get; private set; }
-    public bool IsEnabled => true;
+    public string Provider => provider;
+    public string Model => model;
+    public bool IsEnabled => enabled;
 
     public Task<string> RecognizeAsync(byte[] image, string contentType, CancellationToken cancellationToken)
     {

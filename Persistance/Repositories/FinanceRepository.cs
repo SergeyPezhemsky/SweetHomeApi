@@ -182,6 +182,7 @@ public class FinanceRepository(SweetHomeDbContext context) : IFinanceRepository
                 .SetProperty(x => x.Status, FinanceReceiptStatus.READY)
                 .SetProperty(x => x.FailureReason, (FinanceFailureReason?)null)
                 .SetProperty(x => x.RecognitionJson, result.RawJson)
+                .SetProperty(x => x.RecognitionModel, result.Model)
                 .SetProperty(x => x.UpdatedAt, updatedAt));
         if (updated == 0)
             return false;
@@ -192,7 +193,7 @@ public class FinanceRepository(SweetHomeDbContext context) : IFinanceRepository
     }
 
     public async Task<bool> FailRecognitionAsync(string receiptId, int revision, FinanceFailureReason reason, string? rawJson,
-        DateTime updatedAt)
+        string? model, DateTime updatedAt)
     {
         await using var transaction = await context.Database.BeginTransactionAsync();
         await LockReceiptAsync(receiptId);
@@ -203,6 +204,7 @@ public class FinanceRepository(SweetHomeDbContext context) : IFinanceRepository
                 .SetProperty(x => x.Status, FinanceReceiptStatus.FAILED)
                 .SetProperty(x => x.FailureReason, reason)
                 .SetProperty(x => x.RecognitionJson, x => rawJson ?? x.RecognitionJson)
+                .SetProperty(x => x.RecognitionModel, x => model ?? x.RecognitionModel)
                 .SetProperty(x => x.UpdatedAt, updatedAt));
 
         await transaction.CommitAsync();

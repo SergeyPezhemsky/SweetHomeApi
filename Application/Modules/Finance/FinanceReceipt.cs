@@ -37,6 +37,9 @@ public class FinanceReceipt
     /// <summary>Сырой ответ модели — для отладки и повторного разбора.</summary>
     public string? RecognitionJson { get; set; }
 
+    /// <summary>Модель, ответ которой сохранён (или последний неудачный), например claude-haiku-5-5.</summary>
+    public string? RecognitionModel { get; set; }
+
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
     public string UserId { get; set; } = string.Empty;
@@ -88,4 +91,5 @@ public static class FinanceDefaults
     public const int MaxNoteLength = 500;
     public const int MaxItemNameLength = 200;
     public const decimal MaxAmount = 10_000_000m;
+    public const int MaxModelLength = 200;
 }

@@ -35,7 +35,8 @@ public interface IFinanceRepository
     Task<bool> CompleteRecognitionAsync(string receiptId, int revision, FinanceRecognitionResult result, DateTime updatedAt);
 
     /// <summary>Помечает FAILED, если чек всё ещё PENDING с той же ревизией.</summary>
-    Task<bool> FailRecognitionAsync(string receiptId, int revision, FinanceFailureReason reason, string? rawJson, DateTime updatedAt);
+    Task<bool> FailRecognitionAsync(string receiptId, int revision, FinanceFailureReason reason, string? rawJson, string? model,
+        DateTime updatedAt);
 
     Task<Dictionary<string, FinanceCategory>> GetRulesAsync(string userId, IReadOnlyCollection<string> keys);
 

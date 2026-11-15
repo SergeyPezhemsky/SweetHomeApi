@@ -39,7 +39,21 @@ builder.Services.AddSingleton<WardrobeImageQueue>();
 builder.Services.AddSingleton<IWardrobeImageQueue>(sp => sp.GetRequiredService<WardrobeImageQueue>());
 builder.Services.AddHostedService<WardrobeImageProcessingWorker>();
 builder.Services.Configure<ReceiptRecognitionOptions>(builder.Configuration.GetSection("Finance:Recognition"));
-builder.Services.AddHttpClient<IReceiptRecognizer, OpenAiCompatibleReceiptRecognizer>(client => client.Timeout = Timeout.InfiniteTimeSpan);
+builder.Services.Configure<AnthropicRecognitionOptions>(builder.Configuration.GetSection("Finance:Recognition:Anthropic"));
+// Два провайдера под одним интерфейсом: воркер берёт все и выстраивает по Finance:Recognition:Order.
+// Имена клиентов разные, иначе прокси Anthropic достался бы и Yandex.
+builder.Services.AddHttpClient<IReceiptRecognizer, OpenAiCompatibleReceiptRecognizer>("finance-openai",
+    client => client.Timeout = Timeout.InfiniteTimeSpan);
+builder.Services.AddHttpClient<IReceiptRecognizer, AnthropicReceiptRecognizer>("finance-anthropic",
+        client => client.Timeout = Timeout.InfiniteTimeSpan)
+    .ConfigurePrimaryHttpMessageHandler(sp =>
+    {
+        var settings = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<AnthropicRecognitionOptions>>().Value;
+        // Anthropic не обслуживает запросы из России — с российского сервера ходим через прокси.
+        return AnthropicRecognitionOptions.TryCreateProxy(settings.ProxyUrl, out var proxy)
+            ? new SocketsHttpHandler { Proxy = proxy, UseProxy = true }
+            : new SocketsHttpHandler();
+    });
 builder.Services.AddSingleton<FinanceRecognitionQueue>();
 builder.Services.AddSingleton<IFinanceRecognitionQueue>(sp => sp.GetRequiredService<FinanceRecognitionQueue>());
 builder.Services.AddHostedService<FinanceRecognitionWorker>();
@@ -429,5 +443,8 @@ static void ApplyFinanceSchemaGuard(SweetHomeDbContext context)
         );
 
         CREATE SEQUENCE IF NOT EXISTS "FinanceReceiptRevisionSeq" AS integer CYCLE;
+
+        ALTER TABLE "FinanceReceipts"
+            ADD COLUMN IF NOT EXISTS "RecognitionModel" character varying(200) NULL;
         """);
 }

@@ -409,6 +409,7 @@ public class FinanceController(
             Category = receipt.Category,
             Note = receipt.Note,
             HasImage = receipt.HasImage,
+            RecognitionModel = receipt.RecognitionModel,
             ItemCount = receipt.Items.Count,
             ItemsTotal = receipt.Items.Sum(x => x.Amount),
             CategoryAmount = categoryAmount,

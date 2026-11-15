@@ -5,7 +5,7 @@ Users want to see where their money goes without bookkeeping. The cheapest possi
 
 ## What Changes
 - New `Application.Modules.Finance` module: receipts, receipt items, a fixed category dictionary, per-user category rules learned from manual corrections, and a month summary that allocates each receipt total across its item categories.
-- Receipt recognition through an OpenAI-compatible vision LLM endpoint (default: Yandex AI Studio, reachable from a Russian VPS). Recognition runs in a background worker with a revision guard, like wardrobe background removal. Without configuration recognition is disabled and photos are stored for manual entry.
+- Receipt recognition through vision LLMs: an OpenAI-compatible endpoint (default: Yandex AI Studio, reachable from a Russian VPS) and Anthropic Claude (Messages API, optional proxy), in a configurable priority order with fallback. Recognition runs in a background worker with a revision guard, like wardrobe background removal. Without configuration recognition is disabled and photos are stored for manual entry.
 - New authenticated REST API under `api/v1/finance`: dictionaries, receipt upload, manual receipt, list by month (optionally by category), receipt details and editing, re-recognition, receipt photo, delete, month summary.
 - New tables `FinanceReceipts`, `FinanceReceiptImages`, `FinanceReceiptItems`, `FinanceCategoryRules` (migration plus idempotent schema guard).
 - New main-menu widget `finance` for new users, back-filled for existing users.
@@ -14,4 +14,4 @@ Users want to see where their money goes without bookkeeping. The cheapest possi
 ## Impact
 - Affected specs: `finance` (new), `widgets` (default widget back-fill).
 - Affected code: `Application`, `Persistance`, `SweetHomeApi`, `SweetHomeApi.Tests`, `docker-compose.yml`, `.env.example`, client `src/app/modules/finance-module`, main menu, app routing.
-- External dependency: an LLM provider API key (`FINANCE_LLM_*` env vars). Receipt photos are sent to that provider.
+- External dependency: LLM provider API keys (`FINANCE_LLM_*`, `FINANCE_ANTHROPIC_*` env vars). Receipt photos are sent to the configured providers.

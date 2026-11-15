@@ -266,7 +266,24 @@ public class FinanceService(
         return summary;
     }
 
-    public async Task<bool> CompleteRecognitionAsync(FinancePendingRecognition pending, string modelResponse)
+    public async Task<bool> CompleteRecognitionAsync(FinancePendingRecognition pending, string modelResponse, string? model = null)
+    {
+        var (result, failure) = await EvaluateRecognitionAsync(pending, modelResponse, model);
+        return result is null
+            ? await FailRecognitionAsync(pending, failure!.Value, modelResponse, model)
+            : await SaveRecognitionAsync(pending, result);
+    }
+
+    public Task<bool> SaveRecognitionAsync(FinancePendingRecognition pending, FinanceRecognitionResult result)
+    {
+        foreach (var item in result.Items)
+            item.ReceiptId = pending.ReceiptId;
+
+        return repository.CompleteRecognitionAsync(pending.ReceiptId, pending.Revision, result, UtcNow);
+    }
+
+    public async Task<(FinanceRecognitionResult? Result, FinanceFailureReason? Failure)> EvaluateRecognitionAsync(
+        FinancePendingRecognition pending, string modelResponse, string? model = null)
     {
         var parsed = ReceiptRecognitionParser.Parse(modelResponse);
         var keys = parsed?.Items
@@ -278,20 +295,24 @@ public class FinanceService(
 
         var (result, failure) = BuildRecognitionResult(parsed, pending.UploadedOn, rules,
             currentDate: pending.PurchasedOn, latestDate: DateOnly.FromDateTime(UtcNow).AddDays(1));
-        var raw = Truncate(modelResponse);
-        if (result is null)
-            return await repository.FailRecognitionAsync(pending.ReceiptId, pending.Revision, failure!.Value, raw, UtcNow);
+        if (result is not null)
+        {
+            result.RawJson = Truncate(modelResponse);
+            result.Model = TruncateModel(model);
+        }
 
-        result.RawJson = raw;
-        foreach (var item in result.Items)
-            item.ReceiptId = pending.ReceiptId;
-
-        return await repository.CompleteRecognitionAsync(pending.ReceiptId, pending.Revision, result, UtcNow);
+        return (result, failure);
     }
 
-    public Task<bool> FailRecognitionAsync(FinancePendingRecognition pending, FinanceFailureReason reason, string? rawResponse = null)
+    public Task<bool> FailRecognitionAsync(FinancePendingRecognition pending, FinanceFailureReason reason, string? rawResponse = null,
+        string? model = null)
     {
-        return repository.FailRecognitionAsync(pending.ReceiptId, pending.Revision, reason, Truncate(rawResponse), UtcNow);
+        return repository.FailRecognitionAsync(pending.ReceiptId, pending.Revision, reason, Truncate(rawResponse), TruncateModel(model), UtcNow);
+    }
+
+    private static string? TruncateModel(string? model)
+    {
+        return string.IsNullOrWhiteSpace(model) ? null : TextSafety.Truncate(TextSafety.Clean(model.Trim()), FinanceDefaults.MaxModelLength);
     }
 
     /// <summary>

@@ -8,6 +8,12 @@ public class ReceiptRecognitionOptions
 {
     public string BaseUrl { get; set; } = "https://ai.api.cloud.yandex.net/v1";
 
+    /// <summary>
+    /// Порядок провайдеров через запятую: «openai» (этот, OpenAI-совместимый) и «anthropic».
+    /// Первый — основной; если он недоступен или не смог прочитать чек — пробуем следующий. Не названный не используется.
+    /// </summary>
+    public string Order { get; set; } = "openai,anthropic";
+
     public string? ApiKey { get; set; }
 
     /// <summary>Схема заголовка Authorization: «Api-Key» для Yandex AI Studio, «Bearer» для остальных.</summary>

@@ -40,6 +40,10 @@ public class FinanceReceiptDto
     public FinanceCategory Category { get; set; }
     public string? Note { get; set; }
     public bool HasImage { get; set; }
+
+    /// <summary>Какая модель прочитала чек (или последней пыталась).</summary>
+    public string? RecognitionModel { get; set; }
+
     public int ItemCount { get; set; }
 
     /// <summary>Сумма позиций (может отличаться от итога: скидки, округления, нераспознанные строки).</summary>

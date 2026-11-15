@@ -22,6 +22,12 @@ services:
       Finance__Recognition__AuthScheme: ${FINANCE_LLM_AUTH_SCHEME:-Api-Key}
       Finance__Recognition__Project: ${FINANCE_LLM_PROJECT:-}
       Finance__Recognition__Model: ${FINANCE_LLM_MODEL:-qwen3.6-35b-a3b}
+      # Порядок провайдеров: первый основной, следующий — если первый недоступен или не прочитал чек.
+      Finance__Recognition__Order: ${FINANCE_LLM_ORDER:-openai,anthropic}
+      # Anthropic (Claude): пустой ключ выключает. Из России не обслуживается — нужен прокси за её пределами.
+      Finance__Recognition__Anthropic__ApiKey: ${FINANCE_ANTHROPIC_API_KEY:-}
+      Finance__Recognition__Anthropic__Model: ${FINANCE_ANTHROPIC_MODEL:-claude-haiku-5-5}
+      Finance__Recognition__Anthropic__ProxyUrl: ${FINANCE_ANTHROPIC_PROXY:-}
     ports:
       - "${API_PORT:-5000}:8080"
     depends_on:

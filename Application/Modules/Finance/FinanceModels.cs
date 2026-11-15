@@ -102,6 +102,7 @@ public class FinanceRecognitionResult
     public FinanceCategory Category { get; set; }
     public List<FinanceReceiptItem> Items { get; set; } = [];
     public string? RawJson { get; set; }
+    public string? Model { get; set; }
 }
 
 public enum FinanceOperationStatus

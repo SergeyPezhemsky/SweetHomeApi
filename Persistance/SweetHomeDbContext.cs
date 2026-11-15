@@ -1,4 +1,4 @@
-﻿using Application.Modules.Finance;
+using Application.Modules.Finance;
 using Application.Modules.Health;
 using Application.Modules.Movies;
 using Application.Modules.SmartHome;
@@ -170,6 +170,7 @@ public class SweetHomeDbContext(DbContextOptions<SweetHomeDbContext> options)
             entity.Property(e => e.Currency).HasMaxLength(3);
             entity.Property(e => e.Store).HasMaxLength(FinanceDefaults.MaxStoreLength);
             entity.Property(e => e.Note).HasMaxLength(FinanceDefaults.MaxNoteLength);
+            entity.Property(e => e.RecognitionModel).HasMaxLength(FinanceDefaults.MaxModelLength);
 
             entity
                 .HasMany(e => e.Items)

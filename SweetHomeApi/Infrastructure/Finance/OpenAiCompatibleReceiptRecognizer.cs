@@ -10,6 +10,12 @@ namespace SweetHomeApi.Infrastructure.Finance;
 /// <summary>Распознаёт чек через POST {BaseUrl}/chat/completions с изображением в data URL.</summary>
 public class OpenAiCompatibleReceiptRecognizer(HttpClient httpClient, IOptions<ReceiptRecognitionOptions> options) : IReceiptRecognizer
 {
+    public const string ProviderName = "openai";
+
+    public string Provider => ProviderName;
+
+    public string Model => options.Value.IsEnabled ? options.Value.ResolveModel() : options.Value.Model ?? string.Empty;
+
     public bool IsEnabled => options.Value.IsEnabled;
 
     public async Task<string> RecognizeAsync(byte[] image, string contentType, CancellationToken cancellationToken)
@@ -53,7 +59,7 @@ public class OpenAiCompatibleReceiptRecognizer(HttpClient httpClient, IOptions<R
         {
             using var response = await httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, timeout.Token);
             status = response.StatusCode;
-            body = await ReadLimitedAsync(response.Content, settings.MaxResponseBytes, timeout.Token);
+            body = await ProviderHttp.ReadLimitedAsync(response.Content, settings.MaxResponseBytes, timeout.Token);
         }
         catch (Exception ex) when (ex is HttpRequestException or IOException)
         {
@@ -110,25 +116,5 @@ public class OpenAiCompatibleReceiptRecognizer(HttpClient httpClient, IOptions<R
         }
     }
 
-    /// <summary>Читает ответ, но не больше limit байт: неисправный провайдер не съест память процесса.</summary>
-    private static async Task<string> ReadLimitedAsync(HttpContent content, int limit, CancellationToken cancellationToken)
-    {
-        await using var stream = await content.ReadAsStreamAsync(cancellationToken);
-        using var memory = new MemoryStream();
-        var buffer = new byte[81920];
-        int read;
-        while ((read = await stream.ReadAsync(buffer, cancellationToken)) > 0)
-        {
-            if (memory.Length + read > limit)
-                throw new ReceiptRecognizerException($"Recognition provider response exceeds {limit} bytes");
-            memory.Write(buffer, 0, read);
-        }
-
-        return Encoding.UTF8.GetString(memory.GetBuffer(), 0, (int)memory.Length);
-    }
-
-    private static string Shorten(string value)
-    {
-        return value.Length > 500 ? value[..500] : value;
-    }
+    private static string Shorten(string value) => ProviderHttp.Shorten(value);
 }
