@@ -43,6 +43,7 @@ namespace Persistance.Migrations
                     Status = table.Column<string>(type: "text", nullable: false),
                     FailureReason = table.Column<string>(type: "text", nullable: true),
                     PurchasedOn = table.Column<DateOnly>(type: "date", nullable: false),
+                    UploadedOn = table.Column<DateOnly>(type: "date", nullable: false),
                     Store = table.Column<string>(type: "character varying(120)", maxLength: 120, nullable: true),
                     Total = table.Column<decimal>(type: "numeric(12,2)", precision: 12, scale: 2, nullable: false),
                     Currency = table.Column<string>(type: "character varying(3)", maxLength: 3, nullable: false),

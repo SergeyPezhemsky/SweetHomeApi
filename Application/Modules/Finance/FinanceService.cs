@@ -34,6 +34,7 @@ public class FinanceService(
             Status = enabled ? FinanceReceiptStatus.PENDING : FinanceReceiptStatus.FAILED,
             FailureReason = enabled ? null : FinanceFailureReason.DISABLED,
             PurchasedOn = purchasedOnFallback,
+            UploadedOn = purchasedOnFallback,
             Total = 0,
             Currency = FinanceDefaults.Currency,
             Category = FinanceCategory.OTHER,
@@ -66,6 +67,7 @@ public class FinanceService(
             Source = FinanceReceiptSource.MANUAL,
             Status = FinanceReceiptStatus.READY,
             PurchasedOn = input.PurchasedOn,
+            UploadedOn = input.PurchasedOn,
             Store = NullIfEmpty(input.Store),
             Total = Math.Round(input.Total, 2, MidpointRounding.AwayFromZero),
             Currency = input.Currency,
@@ -98,6 +100,10 @@ public class FinanceService(
             decimal? categoryAmount = null;
             if (category.HasValue)
             {
+                // Как в сводке: чеки в другой валюте в категории не входят — иначе суммы списка не сойдутся с ней.
+                if (!IsBaseCurrency(receipt))
+                    continue;
+
                 if (!allocation.TryGetValue(category.Value, out var amount) || amount <= 0)
                     continue;
                 categoryAmount = amount;
@@ -270,7 +276,7 @@ public class FinanceService(
             .ToList() ?? [];
         var rules = keys.Count > 0 ? await repository.GetRulesAsync(pending.UserId, keys) : [];
 
-        var (result, failure) = BuildRecognitionResult(parsed, pending.PurchasedOn, rules);
+        var (result, failure) = BuildRecognitionResult(parsed, pending.UploadedOn, rules);
         var raw = Truncate(modelResponse);
         if (result is null)
             return await repository.FailRecognitionAsync(pending.ReceiptId, pending.Revision, failure!.Value, raw, UtcNow);
@@ -356,10 +362,7 @@ public class FinanceService(
 
     private static string? Truncate(string? value)
     {
-        if (value is null)
-            return null;
-        // PostgreSQL text не хранит NUL.
-        value = value.Replace("\0", string.Empty);
-        return value.Length > MaxRawResponseLength ? value[..MaxRawResponseLength] : value;
+        // PostgreSQL text не хранит NUL и одиночные суррогаты; обрезаем, не разрывая суррогатную пару.
+        return value is null ? null : TextSafety.Truncate(TextSafety.Clean(value, keepLineBreaks: true), MaxRawResponseLength);
     }
 }

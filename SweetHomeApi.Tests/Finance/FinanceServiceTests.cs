@@ -307,6 +307,48 @@ public class FinanceServiceTests
         Assert.Equal(FinanceFailureReason.DISABLED, repository.Receipts[receipt.Id].FailureReason);
     }
 
+    [Fact]
+    public async Task RecognizeAgainCanFixDateMisreadIntoThePast()
+    {
+        var (repository, service, receipt) = await UploadAsync();
+        await CreateWorker(repository, new FakeRecognizer(_ => Task.FromResult("""{"total": 100, "date": "2025-11-14"}""")))
+            .ProcessAsync(receipt.Id, CancellationToken.None);
+        Assert.Equal(new DateOnly(2025, 11, 14), repository.Receipts[receipt.Id].PurchasedOn);
+
+        await service.RecognizeAgainAsync(UserId, receipt.Id);
+        await CreateWorker(repository, new FakeRecognizer(_ => Task.FromResult("""{"total": 100, "date": "2026-11-14"}""")))
+            .ProcessAsync(receipt.Id, CancellationToken.None);
+
+        Assert.Equal(new DateOnly(2026, 11, 14), repository.Receipts[receipt.Id].PurchasedOn);
+    }
+
+    [Fact]
+    public async Task CategoryListMatchesSummaryAndSkipsOtherCurrencies()
+    {
+        var repository = new FakeFinanceRepository();
+        var service = new FinanceService(repository, new FakeRecognitionQueue(enabled: true));
+        await Manual(service, 50m, FinanceCategory.TRAVEL, Today, currency: "USD");
+        await Manual(service, 700m, FinanceCategory.TRAVEL, Today);
+
+        var list = await service.GetReceiptsAsync(UserId, new FinanceMonth(2026, 11), FinanceCategory.TRAVEL);
+        var summary = await service.GetSummaryAsync(UserId, new FinanceMonth(2026, 11));
+
+        Assert.Equal(700m, Assert.Single(list).CategoryAmount);
+        Assert.Equal(700m, summary.Categories.Single(x => x.Category == FinanceCategory.TRAVEL).Amount);
+    }
+
+    [Fact]
+    public async Task SaveErrorIsReportedAsInternalNotProvider()
+    {
+        var (repository, _, receipt) = await UploadAsync();
+        repository.FailNextComplete = true;
+
+        await CreateWorker(repository, new FakeRecognizer(_ => Task.FromResult(GroceryReceipt))).ProcessAsync(receipt.Id, CancellationToken.None);
+
+        Assert.Equal(FinanceFailureReason.INTERNAL_ERROR, repository.Receipts[receipt.Id].FailureReason);
+        Assert.NotNull(repository.Receipts[receipt.Id].RecognitionJson);
+    }
+
     private static async Task<(FakeFinanceRepository Repository, FinanceService Service, FinanceReceipt Receipt)> UploadAsync()
     {
         var repository = new FakeFinanceRepository();
@@ -354,7 +396,7 @@ public class FinanceServiceTests
 
     private static FinanceRecognitionWorker CreateWorker(FakeFinanceRepository repository, IReceiptRecognizer recognizer, int retries = 0)
     {
-        var options = Options.Create(new ReceiptRecognitionOptions { ApiKey = "key", Retries = retries, RetryDelaySeconds = 0 });
+        var options = Options.Create(new ReceiptRecognitionOptions { ApiKey = "key", Project = "folder", Retries = retries, RetryDelaySeconds = 0 });
         return new FinanceRecognitionWorker(
             new FinanceRecognitionQueue(options),
             CreateScopeFactory(repository, recognizer),

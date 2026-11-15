@@ -85,9 +85,21 @@ public static class ReceiptRecognitionParser
             return null;
         }
 
-        using (document)
+        try
         {
-            var root = document.RootElement;
+            using (document)
+                return ReadReceipt(document.RootElement);
+        }
+        catch (InvalidOperationException)
+        {
+            // Например, одиночный суррогат в строке: GetString() не может его декодировать.
+            return null;
+        }
+    }
+
+    private static RecognizedReceipt? ReadReceipt(JsonElement root)
+    {
+        {
             if (root.ValueKind != JsonValueKind.Object)
                 return null;
 
@@ -115,7 +127,7 @@ public static class ReceiptRecognitionParser
                     if (name is null || amount is null or 0 || Math.Abs(amount.Value) > FinanceDefaults.MaxAmount)
                         continue;
 
-                    var quantity = GetDecimal(item, "quantity");
+                    var quantity = GetDecimal(item, "quantity", maxFractionDigits: 3);
                     var price = RoundMoney(GetDecimal(item, "price"));
                     result.Items.Add(new RecognizedItem(
                         name,
@@ -130,20 +142,120 @@ public static class ReceiptRecognitionParser
         }
     }
 
-    /// <summary>Первый сбалансированный JSON-объект в тексте (модель может обернуть его в ```json или пояснения).</summary>
+    /// <summary>
+    /// JSON-объект ответа. Модель может обернуть его в ```json, пояснения или блок рассуждений &lt;think&gt;:
+    /// рассуждения выкидываем, из нескольких объектов верхнего уровня берём последний (ответ идёт после примеров).
+    /// Если ответ оборван (закончились токены), достраиваем объект до последнего целого значения —
+    /// так итог и уже выписанные позиции не теряются.
+    /// </summary>
     public static string? ExtractJsonObject(string? text)
     {
         if (string.IsNullOrWhiteSpace(text))
             return null;
 
-        for (var start = text.IndexOf('{'); start >= 0; start = text.IndexOf('{', start + 1))
+        text = ThinkBlock.Replace(text, string.Empty);
+        // Незакрытый блок рассуждений (оборванный ответ) — всё после него рассуждение.
+        var openThink = text.IndexOf("<think>", StringComparison.OrdinalIgnoreCase);
+        if (openThink >= 0)
+            text = text[..openThink];
+
+        string? last = null;
+        var lastStart = -1;
+        var firstUnclosed = -1;
+        var position = 0;
+        while (position < text.Length)
         {
-            var depth = 0;
+            var start = text.IndexOf('{', position);
+            if (start < 0)
+                break;
+
+            var end = FindObjectEnd(text, start);
+            if (end < 0)
+            {
+                // Не закрыт до конца текста: либо оборванный ответ, либо случайная «{» в пояснении перед ответом.
+                if (firstUnclosed < 0)
+                    firstUnclosed = start;
+                position = start + 1;
+                continue;
+            }
+
+            var candidate = text[start..(end + 1)];
+            if (IsValidJson(candidate))
+            {
+                last = candidate;
+                lastStart = start;
+                position = end + 1;
+            }
+            else
+            {
+                position = start + 1;
+            }
+        }
+
+        // Незакрытый объект раньше найденного: найденный может быть позицией внутри оборванного ответа.
+        // Если оборванный объект удаётся достроить — берём его (в нём итог), иначе это была случайная скобка.
+        if (firstUnclosed >= 0 && (last is null || firstUnclosed < lastStart))
+            return RepairTruncated(text, firstUnclosed) ?? last;
+
+        return last;
+    }
+
+    private static readonly System.Text.RegularExpressions.Regex ThinkBlock = new(
+        "<think>.*?</think>",
+        System.Text.RegularExpressions.RegexOptions.Singleline | System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+
+    /// <summary>Индекс закрывающей скобки объекта, начинающегося в start; -1 — если текст кончился раньше.</summary>
+    private static int FindObjectEnd(string text, int start)
+    {
+        var depth = 0;
+        var inString = false;
+        var escaped = false;
+        for (var i = start; i < text.Length; i++)
+        {
+            var c = text[i];
+            if (inString)
+            {
+                if (escaped)
+                    escaped = false;
+                else if (c == '\\')
+                    escaped = true;
+                else if (c == '"')
+                    inString = false;
+                continue;
+            }
+
+            if (c == '"')
+                inString = true;
+            else if (c is '{' or '[')
+                depth++;
+            else if (c is '}' or ']' && --depth == 0)
+                return i;
+        }
+
+        return -1;
+    }
+
+    /// <summary>
+    /// Достраивает оборванный JSON: идём назад по закрывающим скобкам и пробуем «обрезать здесь
+    /// и закрыть всё открытое». Первая удачная попытка сохраняет максимум целых значений.
+    /// </summary>
+    private static string? RepairTruncated(string text, int start)
+    {
+        var attempts = 0;
+        for (var cut = text.Length - 1; cut > start && attempts < 300; cut--)
+        {
+            // Режем только там, где предыдущее значение точно закончилось: после «}», «]», «,» или в начале массива.
+            // Обрыв посреди числа («45» из «45.90») дал бы неверную сумму.
+            if (text[cut] is not ('}' or ']' or ',' or '['))
+                continue;
+
+            attempts++;
+            var prefix = text[start..(cut + 1)];
+            var stack = new Stack<char>();
             var inString = false;
             var escaped = false;
-            for (var i = start; i < text.Length; i++)
+            foreach (var c in prefix)
             {
-                var c = text[i];
                 if (inString)
                 {
                     if (escaped)
@@ -157,16 +269,22 @@ public static class ReceiptRecognitionParser
 
                 if (c == '"')
                     inString = true;
-                else if (c == '{')
-                    depth++;
-                else if (c == '}' && --depth == 0)
-                {
-                    var candidate = text[start..(i + 1)];
-                    if (IsValidJson(candidate))
-                        return candidate;
-                    break;
-                }
+                else if (c is '{' or '[')
+                    stack.Push(c);
+                else if (c is '}' or ']' && stack.Count > 0)
+                    stack.Pop();
             }
+
+            if (inString || stack.Count == 0)
+                continue;
+
+            var builder = new StringBuilder(prefix.TrimEnd().TrimEnd(','));
+            while (stack.Count > 0)
+                builder.Append(stack.Pop() == '{' ? '}' : ']');
+
+            var candidate = builder.ToString();
+            if (IsValidJson(candidate))
+                return candidate;
         }
 
         return null;
@@ -213,30 +331,66 @@ public static class ReceiptRecognitionParser
             : null;
     }
 
-    public static decimal? ParseAmount(string? value)
+    /// <summary>
+    /// Сумма из строки: «1 234,50», «1.234,50», «1,234.50», «89,90 р.», «−50,00 ₽».
+    /// Разделитель считается десятичным, только если за ним 1..maxFractionDigits цифр и он последний;
+    /// буквы между цифрами («1e3») — не число.
+    /// </summary>
+    public static decimal? ParseAmount(string? value, int maxFractionDigits = 2)
     {
         if (string.IsNullOrWhiteSpace(value))
             return null;
 
-        var builder = new StringBuilder();
-        foreach (var c in value.Trim())
+        var text = value.Trim();
+        var first = -1;
+        var last = -1;
+        for (var i = 0; i < text.Length; i++)
         {
-            if (char.IsDigit(c) || c == '-')
-                builder.Append(c);
-            else if (c is ',' or '.')
-                builder.Append('.');
-            // Пробелы (в т.ч. неразрывные) — разделители тысяч; символы валют отбрасываем.
+            if (!char.IsAsciiDigit(text[i]))
+                continue;
+            if (first < 0)
+                first = i;
+            last = i;
         }
 
-        var text = builder.ToString();
-        // «1.234.56» → оставляем только последнюю точку как десятичную.
-        var lastDot = text.LastIndexOf('.');
-        if (lastDot >= 0)
-            text = text[..lastDot].Replace(".", string.Empty) + text[lastDot..];
+        if (first < 0)
+            return null;
 
-        return decimal.TryParse(text, NumberStyles.AllowLeadingSign | NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture, out var amount)
-            ? amount
-            : null;
+        // Минус — любой вид тире перед первой цифрой (модели пишут и U+2212).
+        var negative = text[..first].Any(c => c is '-' or '\u2212' or '\u2012' or '\u2013' or '\u2014' or '\u2010' or '\u2011');
+
+        var digits = new StringBuilder();
+        var lastSeparator = -1;
+        foreach (var c in text[first..(last + 1)])
+        {
+            if (char.IsAsciiDigit(c))
+            {
+                digits.Append(c);
+            }
+            else if (c is '.' or ',')
+            {
+                lastSeparator = digits.Length;
+                digits.Append('.');
+            }
+            else if (!char.IsWhiteSpace(c) && c is not ('\'' or '\u2019'))
+            {
+                return null;
+            }
+        }
+
+        var raw = digits.ToString();
+        string normalized;
+        var fraction = lastSeparator >= 0 ? raw.Length - lastSeparator - 1 : 0;
+        if (lastSeparator >= 0 && fraction >= 1 && fraction <= maxFractionDigits)
+            normalized = raw[..lastSeparator].Replace(".", string.Empty) + "." + raw[(lastSeparator + 1)..];
+        else
+            normalized = raw.Replace(".", string.Empty);
+
+        if (normalized.Length == 0 || normalized.Length > 20
+            || !decimal.TryParse(normalized, NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture, out var amount))
+            return null;
+
+        return negative ? -amount : amount;
     }
 
     private static bool IsValidJson(string candidate)
@@ -310,7 +464,7 @@ public static class ReceiptRecognitionParser
         };
     }
 
-    private static decimal? GetDecimal(JsonElement element, string name)
+    private static decimal? GetDecimal(JsonElement element, string name, int maxFractionDigits = 2)
     {
         if (!TryGetProperty(element, name, out var value))
             return null;
@@ -318,7 +472,7 @@ public static class ReceiptRecognitionParser
         return value.ValueKind switch
         {
             JsonValueKind.Number when value.TryGetDecimal(out var number) => number,
-            JsonValueKind.String => ParseAmount(value.GetString()),
+            JsonValueKind.String => ParseAmount(value.GetString(), maxFractionDigits),
             _ => null
         };
     }
@@ -328,10 +482,55 @@ public static class ReceiptRecognitionParser
         if (value is null)
             return null;
 
-        var text = new string(value.Where(c => !char.IsControl(c)).ToArray()).Trim();
+        var text = TextSafety.Clean(value).Trim();
         if (text.Length == 0 || text.Equals("null", StringComparison.OrdinalIgnoreCase))
             return null;
 
-        return text.Length > maxLength ? text[..maxLength].TrimEnd() : text;
+        return TextSafety.Truncate(text, maxLength).TrimEnd();
+    }
+}
+
+/// <summary>Текст, который PostgreSQL (UTF-8, без NUL) примет без ошибок.</summary>
+public static class TextSafety
+{
+    /// <summary>Убирает управляющие символы и одиночные суррогаты (их нельзя закодировать в UTF-8).</summary>
+    public static string Clean(string value, bool keepLineBreaks = false)
+    {
+        var builder = new StringBuilder(value.Length);
+        for (var i = 0; i < value.Length; i++)
+        {
+            var c = value[i];
+            if (char.IsHighSurrogate(c))
+            {
+                if (i + 1 < value.Length && char.IsLowSurrogate(value[i + 1]))
+                {
+                    builder.Append(c).Append(value[i + 1]);
+                    i++;
+                }
+
+                continue;
+            }
+
+            if (char.IsLowSurrogate(c))
+                continue;
+            if (char.IsControl(c) && !(keepLineBreaks && c is '\n' or '\r' or '\t'))
+                continue;
+
+            builder.Append(c);
+        }
+
+        return builder.ToString();
+    }
+
+    /// <summary>Обрезает до maxLength UTF-16 единиц, не разрывая суррогатную пару.</summary>
+    public static string Truncate(string value, int maxLength)
+    {
+        if (value.Length <= maxLength)
+            return value;
+
+        var length = maxLength;
+        if (length > 0 && char.IsHighSurrogate(value[length - 1]))
+            length--;
+        return value[..length];
     }
 }

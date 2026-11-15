@@ -51,9 +51,9 @@ public class OpenAiCompatibleReceiptRecognizer(HttpClient httpClient, IOptions<R
         HttpStatusCode status;
         try
         {
-            using var response = await httpClient.SendAsync(request, timeout.Token);
+            using var response = await httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, timeout.Token);
             status = response.StatusCode;
-            body = await response.Content.ReadAsStringAsync(timeout.Token);
+            body = await ReadLimitedAsync(response.Content, settings.MaxResponseBytes, timeout.Token);
         }
         catch (Exception ex) when (ex is HttpRequestException or IOException)
         {
@@ -106,6 +106,23 @@ public class OpenAiCompatibleReceiptRecognizer(HttpClient httpClient, IOptions<R
         {
             return null;
         }
+    }
+
+    /// <summary>Читает ответ, но не больше limit байт: неисправный провайдер не съест память процесса.</summary>
+    private static async Task<string> ReadLimitedAsync(HttpContent content, int limit, CancellationToken cancellationToken)
+    {
+        await using var stream = await content.ReadAsStreamAsync(cancellationToken);
+        using var memory = new MemoryStream();
+        var buffer = new byte[81920];
+        int read;
+        while ((read = await stream.ReadAsync(buffer, cancellationToken)) > 0)
+        {
+            if (memory.Length + read > limit)
+                throw new ReceiptRecognizerException($"Recognition provider response exceeds {limit} bytes");
+            memory.Write(buffer, 0, read);
+        }
+
+        return Encoding.UTF8.GetString(memory.GetBuffer(), 0, (int)memory.Length);
     }
 
     private static string Shorten(string value)

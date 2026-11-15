@@ -87,7 +87,7 @@ public record FinancePendingRecognition(
     string ReceiptId,
     string UserId,
     int Revision,
-    DateOnly PurchasedOn,
+    DateOnly UploadedOn,
     byte[] Data,
     string ContentType);
 

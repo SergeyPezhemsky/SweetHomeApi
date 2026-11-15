@@ -12,6 +12,12 @@ public class FinanceReceipt
     /// <summary>Дата покупки (без времени и часового пояса — как напечатано на чеке).</summary>
     public DateOnly PurchasedOn { get; set; }
 
+    /// <summary>
+    /// Дата загрузки по часам пользователя: точка отсчёта для проверки распознанной даты.
+    /// Не меняется при правках — повторное распознавание может исправить ошибочно прочитанную дату.
+    /// </summary>
+    public DateOnly UploadedOn { get; set; }
+
     public string? Store { get; set; }
 
     /// <summary>Итог чека — главная сумма; позиции распределяются пропорционально ему.</summary>

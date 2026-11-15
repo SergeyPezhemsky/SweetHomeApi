@@ -21,16 +21,30 @@ public class ReceiptRecognitionOptions
 
     public int TimeoutSeconds { get; set; } = 120;
 
-    public int MaxTokens { get; set; } = 4000;
+    /// <summary>С запасом на длинный чек (150 позиций по ~50 токенов); оборванный ответ всё равно достраивается.</summary>
+    public int MaxTokens { get; set; } = 12000;
+
+    /// <summary>Предел размера ответа провайдера.</summary>
+    public int MaxResponseBytes { get; set; } = 2 * 1024 * 1024;
 
     /// <summary>Сколько раз повторить запрос, если провайдер недоступен (сеть, 429, 5xx).</summary>
     public int Retries { get; set; } = 3;
 
     public int RetryDelaySeconds { get; set; } = 15;
 
+    /// <summary>Через сколько повторить чек, если не удалось записать результат в базу.</summary>
+    public int InternalRetryDelaySeconds { get; set; } = 60;
+
     public bool IsEnabled => !string.IsNullOrWhiteSpace(ApiKey)
                              && !string.IsNullOrWhiteSpace(Model)
-                             && Uri.TryCreate(BaseUrl, UriKind.Absolute, out _);
+                             && Uri.TryCreate(BaseUrl, UriKind.Absolute, out _)
+                             && !MissingYandexFolder;
+
+    /// <summary>Yandex AI Studio без идентификатора каталога отклоняет каждый запрос — это ошибка настройки, а не сбой.</summary>
+    public bool MissingYandexFolder => Uri.TryCreate(BaseUrl, UriKind.Absolute, out var uri)
+                                       && uri.Host.EndsWith("yandex.net", StringComparison.OrdinalIgnoreCase)
+                                       && string.IsNullOrWhiteSpace(Project)
+                                       && !(Model ?? string.Empty).Contains("://", StringComparison.Ordinal);
 
     public string ResolveModel()
     {

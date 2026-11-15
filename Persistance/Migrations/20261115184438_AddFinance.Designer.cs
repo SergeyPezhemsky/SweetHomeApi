@@ -13,7 +13,7 @@ using Persistance;
 namespace Persistance.Migrations
 {
     [DbContext(typeof(SweetHomeDbContext))]
-    [Migration("20261115181600_AddFinance")]
+    [Migration("20261115184438_AddFinance")]
     partial class AddFinance
     {
         /// <inheritdoc />
@@ -101,6 +101,9 @@ namespace Persistance.Migrations
 
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateOnly>("UploadedOn")
+                        .HasColumnType("date");
 
                     b.Property<string>("UserId")
                         .IsRequired()

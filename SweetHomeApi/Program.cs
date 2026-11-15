@@ -372,6 +372,7 @@ static void ApplyFinanceSchemaGuard(SweetHomeDbContext context)
             "Status" text NOT NULL,
             "FailureReason" text NULL,
             "PurchasedOn" date NOT NULL,
+            "UploadedOn" date NOT NULL,
             "Store" character varying(120) NULL,
             "Total" numeric(12,2) NOT NULL,
             "Currency" character varying(3) NOT NULL,

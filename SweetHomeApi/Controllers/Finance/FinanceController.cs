@@ -22,6 +22,7 @@ public class FinanceController(
     public const int MaxImageBytes = 5 * 1024 * 1024;
     private const int MaxRequestBytes = MaxImageBytes + 512 * 1024;
     private const string ImageTooLarge = "Фото должно быть не больше 5 МБ";
+    private const string DateError = "Укажите дату в формате ГГГГ-ММ-ДД, не позже сегодняшней";
 
     [HttpGet("dictionaries")]
     public IActionResult GetDictionaries()
@@ -150,7 +151,7 @@ public class FinanceController(
             if (TryParseDate(purchasedOnText, out var parsed))
                 purchasedOn = parsed;
             else
-                details.Add(new ErrorDetailDto { Field = "purchasedOn", Message = "Дата должна быть в формате ГГГГ-ММ-ДД" });
+                details.Add(new ErrorDetailDto { Field = "purchasedOn", Message = DateError });
         }
 
         var file = form.Files.GetFile("file");
@@ -188,7 +189,7 @@ public class FinanceController(
         var details = new List<ErrorDetailDto>();
         var purchasedOn = TodayUtc();
         if (!string.IsNullOrWhiteSpace(dto.PurchasedOn) && !TryParseDate(dto.PurchasedOn, out purchasedOn))
-            details.Add(new ErrorDetailDto { Field = "purchasedOn", Message = "Дата должна быть в формате ГГГГ-ММ-ДД" });
+            details.Add(new ErrorDetailDto { Field = "purchasedOn", Message = DateError });
 
         ValidateTotal(dto.Total, details);
         var category = ValidateCategory(dto.Category, "category", details);
@@ -221,7 +222,7 @@ public class FinanceController(
         var details = new List<ErrorDetailDto>();
         var purchasedOn = default(DateOnly);
         if (string.IsNullOrWhiteSpace(dto.PurchasedOn) || !TryParseDate(dto.PurchasedOn, out purchasedOn))
-            details.Add(new ErrorDetailDto { Field = "purchasedOn", Message = "Укажите дату в формате ГГГГ-ММ-ДД" });
+            details.Add(new ErrorDetailDto { Field = "purchasedOn", Message = DateError });
 
         ValidateTotal(dto.Total, details);
         var category = ValidateCategory(dto.Category, "category", details);
@@ -250,7 +251,9 @@ public class FinanceController(
                 else
                     ValidateText(item.Name, $"{field}.name", FinanceDefaults.MaxItemNameLength, "Название позиции", details);
 
-                if (item.Amount is null || item.Amount == 0 || Math.Abs(item.Amount.Value) > FinanceDefaults.MaxAmount)
+                // Сначала округляем до копеек: 0,004 после сохранения стало бы нулём.
+                var amount = item.Amount is null ? (decimal?)null : Math.Round(item.Amount.Value, 2, MidpointRounding.AwayFromZero);
+                if (amount is null || amount == 0 || Math.Abs(amount.Value) > FinanceDefaults.MaxAmount)
                     details.Add(new ErrorDetailDto { Field = $"{field}.amount", Message = "Сумма позиции — ненулевое число не больше 10 млн по модулю" });
                 if (item.Quantity is < 0 or >= 1_000_000)
                     details.Add(new ErrorDetailDto { Field = $"{field}.quantity", Message = "Количество — от 0 до 1 000 000" });
@@ -258,7 +261,7 @@ public class FinanceController(
                     details.Add(new ErrorDetailDto { Field = $"{field}.price", Message = "Цена — от 0 до 10 млн" });
                 var itemCategory = ValidateCategory(item.Category, $"{field}.category", details);
 
-                if (itemCategory is not null && item.Amount is not null && !string.IsNullOrWhiteSpace(item.Name))
+                if (itemCategory is not null && amount is not null && !string.IsNullOrWhiteSpace(item.Name))
                 {
                     items.Add(new FinanceReceiptItemUpdate
                     {
@@ -266,7 +269,7 @@ public class FinanceController(
                         Name = item.Name,
                         Quantity = item.Quantity is null ? null : Math.Round(item.Quantity.Value, 3, MidpointRounding.AwayFromZero),
                         Price = item.Price is null ? null : Math.Round(item.Price.Value, 2, MidpointRounding.AwayFromZero),
-                        Amount = item.Amount.Value,
+                        Amount = amount!.Value,
                         Category = itemCategory.Value
                     });
                 }
@@ -336,10 +339,15 @@ public class FinanceController(
 
     private static DateOnly TodayUtc() => DateOnly.FromDateTime(DateTime.UtcNow);
 
+    /// <summary>
+    /// Дата покупки: не раньше 2000 года и не позже завтрашнего дня по UTC (у пользователя может быть уже «завтра»).
+    /// Будущие даты не принимаем: месяц из будущего в интерфейсе не открыть, и расход бы «потерялся».
+    /// </summary>
     private static bool TryParseDate(string value, out DateOnly date)
     {
         return DateOnly.TryParseExact(value.Trim(), "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out date)
-               && date.Year is >= 2000 and <= 2100;
+               && date.Year >= 2000
+               && date <= TodayUtc().AddDays(1);
     }
 
     private static void ValidateTotal(decimal? total, List<ErrorDetailDto> details)

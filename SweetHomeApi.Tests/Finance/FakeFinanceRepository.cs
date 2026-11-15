@@ -11,6 +11,9 @@ internal sealed class FakeFinanceRepository : IFinanceRepository
     public Dictionary<string, FinanceReceiptImage> Images { get; } = [];
     public Dictionary<(string UserId, string Key), FinanceCategory> Rules { get; } = [];
 
+    /// <summary>Имитация сбоя базы при сохранении результата распознавания.</summary>
+    public bool FailNextComplete { get; set; }
+
     public Task<int> NextRevisionAsync() => Task.FromResult(++_revision);
 
     public Task AddReceiptAsync(FinanceReceipt receipt, FinanceReceiptImage? image)
@@ -97,11 +100,17 @@ internal sealed class FakeFinanceRepository : IFinanceRepository
             return Task.FromResult<FinancePendingRecognition?>(null);
 
         return Task.FromResult<FinancePendingRecognition?>(new FinancePendingRecognition(
-            receipt.Id, receipt.UserId, receipt.Revision, receipt.PurchasedOn, image.Data, image.ContentType));
+            receipt.Id, receipt.UserId, receipt.Revision, receipt.UploadedOn, image.Data, image.ContentType));
     }
 
     public Task<bool> CompleteRecognitionAsync(string receiptId, int revision, FinanceRecognitionResult result, DateTime updatedAt)
     {
+        if (FailNextComplete)
+        {
+            FailNextComplete = false;
+            throw new InvalidOperationException("database is down");
+        }
+
         if (!Receipts.TryGetValue(receiptId, out var receipt) || receipt.Revision != revision
             || receipt.Status != FinanceReceiptStatus.PENDING)
             return Task.FromResult(false);

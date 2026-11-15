@@ -14,8 +14,9 @@
 | UserId | text FK AspNetUsers, cascade | owner |
 | Source | text enum | `PHOTO`, `MANUAL` |
 | Status | text enum | `PENDING`, `READY`, `FAILED` |
-| FailureReason | text enum? | `NOT_A_RECEIPT`, `UNREADABLE`, `PROVIDER_ERROR`, `DISABLED` |
-| PurchasedOn | date | from the receipt; fallback is the client's local date at upload |
+| FailureReason | text enum? | `NOT_A_RECEIPT`, `UNREADABLE`, `PROVIDER_ERROR`, `DISABLED`, `INTERNAL_ERROR` (answer received but could not be saved) |
+| PurchasedOn | date | from the receipt; fallback is the client's local date at upload; never later than tomorrow (UTC) |
+| UploadedOn | date | client's local date at upload (manual: purchase date); never changes, it is the reference for date plausibility on every (re-)recognition |
 | Store | varchar(120)? | |
 | Total | numeric(12,2) | authoritative amount of the receipt, ≥ 0 |
 | Currency | varchar(3) | ISO code, default `RUB` |
@@ -37,18 +38,18 @@ Fixed dictionary with codes, Russian names, Material icon and chart colour: GROC
 
 ## Recognition
 - `IReceiptRecognizer` in Application; implementation `OpenAiCompatibleReceiptRecognizer` posts `chat/completions` with the image as a base64 data URL and a prompt that lists category codes and requires a JSON object (`isReceipt`, `store`, `date`, `currency`, `total`, `category`, `items[]`).
-- Config section `Finance:Recognition`: `BaseUrl` (default `https://ai.api.cloud.yandex.net/v1`), `ApiKey`, `AuthScheme` (`Api-Key` for Yandex, `Bearer` otherwise), `Project` (Yandex folder id, sent as `OpenAI-Project`), `Model` (`gpt://<folder>/<model>` is built when the value has no scheme and `Project` is set), `TimeoutSeconds`. Empty key or model disables recognition.
-- Parsing is tolerant: code fences and text around the JSON object are ignored, numbers may be strings with spaces/commas, unknown categories become `OTHER`, items without a positive name or amount are dropped, at most 150 items.
+- Config section `Finance:Recognition`: `BaseUrl` (default `https://ai.api.cloud.yandex.net/v1`), `ApiKey`, `AuthScheme` (`Api-Key` for Yandex, `Bearer` otherwise), `Project` (Yandex folder id, sent as `OpenAI-Project`), `Model` (`gpt://<folder>/<model>` is built when the value has no scheme and `Project` is set), `TimeoutSeconds`, `MaxTokens` (12000), `MaxResponseBytes` (2 MB). Empty key or model disables recognition; a Yandex URL without folder id (and without a full `gpt://` model URI) also disables it with a startup warning.
+- Parsing is tolerant: `<think>` reasoning blocks, code fences and text around the JSON are ignored; of several top-level objects the last valid one wins; a truncated answer (token limit) is repaired by cutting after the last complete value and closing open brackets, so the total and complete items survive. Amount strings: spaces, NBSP, «р.»/«руб.», `−` (U+2212) and other dashes; a separator is decimal only when followed by 1–2 digits (3 for quantity); letters between digits make the value invalid. Unknown categories become `OTHER`; items without a name or non-zero amount are dropped; at most 150 items. Text is cleaned of control characters and lone surrogates and truncated on a surrogate boundary.
 - After parsing, user rules override AI categories (`CategorySource = RULE`).
 - Total: the model total when present, otherwise the sum of items. Date: the model date when it is not more than one day after the fallback date and not older than 3 years; otherwise the fallback date.
-- Worker: one receipt at a time; provider unavailability (network, 429, 5xx) is retried with delay; on final failure status becomes `FAILED` with `PROVIDER_ERROR`; non-receipt photo → `FAILED/NOT_A_RECEIPT`; unparsable → `FAILED/UNREADABLE`. On startup PENDING receipts are re-queued; when recognition is disabled they become `FAILED/DISABLED`.
+- Worker: one receipt at a time; provider unavailability (network, 429, 5xx) is retried with delay; on final failure status becomes `FAILED` with `PROVIDER_ERROR`; non-receipt photo → `FAILED/NOT_A_RECEIPT`; unparsable → `FAILED/UNREADABLE`; a failure to save the answer → `FAILED/INTERNAL_ERROR` (raw answer kept). If even that write fails (database down), the receipt is re-queued after `InternalRetryDelaySeconds`. On startup PENDING receipts are re-queued; when recognition is disabled they become `FAILED/DISABLED`.
 - Editing a receipt or re-recognition bumps the revision, so an in-flight result is discarded.
 
 ## Month summary and allocation
 Only `READY` receipts in `RUB` are summed; other currencies are reported as `otherCurrencyCount`. Each receipt contributes exactly its `Total`:
 - no items → whole total goes to the receipt category;
 - items → totals per item category are scaled proportionally so they add up to the receipt total (largest-remainder rounding to kopecks). If the item sum is ≤ 0 the total goes to the receipt category.
-The same allocation is used for the category filter of the receipt list, so a receipt row shows the amount that category got in the summary.
+The same allocation and the same RUB-only rule are used for the category filter of the receipt list, so a receipt row shows the amount that category got in the summary.
 
 ## Learning from corrections
 When a user changes the category of an item in `PUT receipts/{id}`, the rule for that item key is upserted. Rules apply to future recognitions only.

@@ -153,7 +153,7 @@ public class FinanceRepository(SweetHomeDbContext context) : IFinanceRepository
                 x.ReceiptId,
                 x.Receipt.UserId,
                 x.Receipt.Revision,
-                x.Receipt.PurchasedOn,
+                x.Receipt.UploadedOn,
                 x.Data,
                 x.ContentType
             })
@@ -161,7 +161,7 @@ public class FinanceRepository(SweetHomeDbContext context) : IFinanceRepository
 
         return pending is null
             ? null
-            : new FinancePendingRecognition(pending.ReceiptId, pending.UserId, pending.Revision, pending.PurchasedOn,
+            : new FinancePendingRecognition(pending.ReceiptId, pending.UserId, pending.Revision, pending.UploadedOn,
                 pending.Data, pending.ContentType);
     }
 

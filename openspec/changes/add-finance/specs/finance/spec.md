@@ -37,14 +37,14 @@ The worker SHALL fill store, date, currency, total, receipt category and items f
 - THEN the item gets category `PETS` with `categorySource = RULE` (same key «корм purina»).
 
 ### Requirement: Manual receipt
-`POST api/v1/finance/receipts/manual` with `{ total, category, purchasedOn?, store?, note? }` SHALL create a `READY` receipt without items and photo. `total` 0.01..10 000 000, category known, store ≤ 120, note ≤ 500.
+`POST api/v1/finance/receipts/manual` with `{ total, category, purchasedOn?, store?, note? }` SHALL create a `READY` receipt without items and photo. `total` 0.01..10 000 000, category known, store ≤ 120, note ≤ 500, `purchasedOn` from 2000-01-01 to tomorrow (UTC) — the same date rule applies to upload and editing.
 
 ### Requirement: Receipt list
-`GET api/v1/finance/receipts?month=yyyy-MM[&category=CODE]` SHALL return the month's receipts (all statuses) sorted by `purchasedOn` desc then `createdAt` desc, without items. With `category`, only `READY` receipts that allocate a non-zero amount to the category are returned, each with `categoryAmount`.
+`GET api/v1/finance/receipts?month=yyyy-MM[&category=CODE]` SHALL return the month's receipts (all statuses) sorted by `purchasedOn` desc then `createdAt` desc, without items. With `category`, only `READY` RUB receipts that allocate a non-zero amount to the category are returned, each with `categoryAmount` (they add up to the summary amount of the category).
 
 ### Requirement: Receipt details and editing
 - `GET api/v1/finance/receipts/{id}` SHALL return the receipt with items and `itemsTotal`.
-- `PUT api/v1/finance/receipts/{id}` with `{ purchasedOn, store?, total, currency?, category, note?, items[] }` SHALL replace the receipt fields and items, set `status = READY`, clear `failureReason`, bump the revision. Items: ≤ 150, name 1..200, amount −10 000 000..10 000 000 and non-zero, quantity/price optional ≥ 0, known category.
+- `PUT api/v1/finance/receipts/{id}` with `{ purchasedOn, store?, total, currency?, category, note?, items[] }` SHALL replace the receipt fields and items, set `status = READY`, clear `failureReason`, bump the revision. Items: ≤ 150, name 1..200, amount −10 000 000..10 000 000 and non-zero after rounding to kopecks, quantity/price optional ≥ 0, known category.
 - An item whose category differs from the stored category of the same item (same id) SHALL get `categorySource = USER` and upsert the user's rule for its key.
 - `DELETE api/v1/finance/receipts/{id}` SHALL delete the receipt with items and photo (`204`).
 

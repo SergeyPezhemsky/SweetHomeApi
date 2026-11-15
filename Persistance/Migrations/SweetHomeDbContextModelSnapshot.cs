@@ -99,6 +99,9 @@ namespace Persistance.Migrations
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<DateOnly>("UploadedOn")
+                        .HasColumnType("date");
+
                     b.Property<string>("UserId")
                         .IsRequired()
                         .HasColumnType("text");

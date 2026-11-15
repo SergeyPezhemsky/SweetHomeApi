@@ -136,6 +136,7 @@ public class FinanceLogicTests
 
         Assert.Equal("Кафе {Ромашка}", parsed!.Store);
         Assert.Equal(300m, parsed.Total);
+        Assert.Equal(7m, ReceiptRecognitionParser.Parse("""Скобка { без пары, ответ: {"total": 7}""")!.Total);
     }
 
     [Theory]
@@ -143,10 +144,68 @@ public class FinanceLogicTests
     [InlineData("1.234,50", 1234.50)]
     [InlineData("1,234.50", 1234.50)]
     [InlineData("-50,00 ₽", -50.0)]
+    [InlineData("\u221210,00", -10.0)]
+    [InlineData("1 250,00 р.", 1250.0)]
+    [InlineData("89,90 руб.", 89.90)]
+    [InlineData("1\u202F234,5", 1234.5)]
+    [InlineData("1,234", 1234.0)]
+    [InlineData("1e3", null)]
     [InlineData("abc", null)]
     public void AmountParsing(string text, double? expected)
     {
         Assert.Equal(expected is null ? null : (decimal)expected.Value, ReceiptRecognitionParser.ParseAmount(text));
+    }
+
+    [Fact]
+    public void QuantityKeepsThreeDecimals()
+    {
+        Assert.Equal(1.234m, ReceiptRecognitionParser.ParseAmount("1,234", maxFractionDigits: 3));
+        Assert.Equal(1.5m, ReceiptRecognitionParser.ParseAmount("1.5 кг.", maxFractionDigits: 3));
+    }
+
+    [Fact]
+    public void ParserKeepsSurrogatePairsIntactWhenTruncating()
+    {
+        var name = new string('а', 199) + "😀хвост";
+        var parsed = ReceiptRecognitionParser.Parse($$"""{"total": 10, "items": [{"name": "{{name}}", "amount": 10}]}""");
+
+        var stored = parsed!.Items.Single().Name;
+        Assert.Equal(199, stored.Length);
+        Assert.DoesNotContain(stored, char.IsSurrogate);
+        Assert.Null(ReceiptRecognitionParser.Parse("""{"store": "x\ud83d", "total": 1}"""));
+        Assert.Equal("ab", TextSafety.Clean("a\ud83db\0"));
+    }
+
+    [Fact]
+    public void TruncatedAnswerKeepsTotalAndCompleteItems()
+    {
+        const string response = """{"isReceipt":true,"store":"Магнит","total":5320.40,"items":[{"name":"Молоко","amount":89.9,"category":"GROCERIES"},{"name":"Хлеб","amount":45,"category":"GROC""";
+
+        var parsed = ReceiptRecognitionParser.Parse(response);
+
+        Assert.Equal(5320.40m, parsed!.Total);
+        Assert.Equal(["Молоко", "Хлеб"], parsed.Items.Select(x => x.Name));
+        // Сумма «Хлеба» дописана целиком (обрыв был дальше); недописанная категория → OTHER.
+        Assert.Equal(45m, parsed.Items[1].Amount);
+        Assert.Equal(FinanceCategory.OTHER, parsed.Items[1].Category);
+
+        var cutInNumber = ReceiptRecognitionParser.Parse("""{"total": 100, "items": [{"name": "Сыр", "amount": 45""");
+        Assert.Equal(100m, cutInNumber!.Total);
+        Assert.Empty(cutInNumber.Items);
+    }
+
+    [Fact]
+    public void ReasoningBlockAndPromptEchoAreIgnored()
+    {
+        const string response = """
+            <think>Схема требует {"isReceipt": false}, если это не чек. Здесь чек.</think>
+            {"isReceipt": true, "total": 120}
+            """;
+
+        var parsed = ReceiptRecognitionParser.Parse(response);
+
+        Assert.True(parsed!.IsReceipt);
+        Assert.Equal(120m, parsed.Total);
     }
 
     [Fact]
@@ -166,7 +225,10 @@ public class FinanceLogicTests
         Assert.Equal("gpt://other/m", new ReceiptRecognitionOptions { Project = "b1g", Model = "gpt://other/m" }.ResolveModel());
         Assert.Equal("gpt-4o", new ReceiptRecognitionOptions { Model = "gpt-4o" }.ResolveModel());
         Assert.False(new ReceiptRecognitionOptions { ApiKey = "" }.IsEnabled);
-        Assert.True(new ReceiptRecognitionOptions { ApiKey = "k" }.IsEnabled);
+        // Yandex без каталога отклонит каждый запрос — такое распознавание считаем выключенным.
+        Assert.False(new ReceiptRecognitionOptions { ApiKey = "k" }.IsEnabled);
+        Assert.True(new ReceiptRecognitionOptions { ApiKey = "k", Project = "b1g" }.IsEnabled);
+        Assert.True(new ReceiptRecognitionOptions { ApiKey = "k", BaseUrl = "https://llm.example/v1", Model = "m" }.IsEnabled);
     }
 
     [Fact]

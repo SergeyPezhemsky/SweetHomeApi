@@ -47,7 +47,10 @@ public enum FinanceFailureReason
     PROVIDER_ERROR,
 
     /// <summary>Распознавание выключено в настройках сервера.</summary>
-    DISABLED
+    DISABLED,
+
+    /// <summary>Ответ получен, но сохранить его не удалось (ошибка на сервере).</summary>
+    INTERNAL_ERROR
 }
 
 /// <summary>Откуда у позиции категория.</summary>
