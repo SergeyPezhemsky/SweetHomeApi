@@ -22,4 +22,4 @@
 - [x] Production build.
 
 ## 5. Review
-- [ ] Independent review rounds until no confirmed findings.
+- [x] Independent review rounds (gauntlet loop, 5 rounds; round 4 backend clean, round 5 one low client defect fixed and verified).
