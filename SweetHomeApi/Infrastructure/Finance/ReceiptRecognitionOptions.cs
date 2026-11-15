@@ -19,7 +19,8 @@ public class ReceiptRecognitionOptions
     /// <summary>Модель с поддержкой изображений. Без схемы и с заданным Project превращается в gpt://{Project}/{Model}.</summary>
     public string? Model { get; set; } = "qwen3.6-35b-a3b";
 
-    public int TimeoutSeconds { get; set; } = 120;
+    /// <summary>Длинный чек — это тысячи токенов ответа; таймаут не повторяется автоматически.</summary>
+    public int TimeoutSeconds { get; set; } = 240;
 
     /// <summary>С запасом на длинный чек (150 позиций по ~50 токенов); оборванный ответ всё равно достраивается.</summary>
     public int MaxTokens { get; set; } = 12000;

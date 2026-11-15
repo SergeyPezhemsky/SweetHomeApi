@@ -61,7 +61,9 @@ public class OpenAiCompatibleReceiptRecognizer(HttpClient httpClient, IOptions<R
         }
         catch (OperationCanceledException ex) when (!cancellationToken.IsCancellationRequested)
         {
-            throw new ReceiptRecognizerUnavailableException("Recognition provider timed out", ex);
+            // Не повторяем: медленный ответ повторится таким же медленным, а каждая попытка стоит денег.
+            // Пользователь может нажать «Повторить» в карточке чека.
+            throw new ReceiptRecognizerException("Recognition provider timed out", ex);
         }
 
         if (status is HttpStatusCode.TooManyRequests or HttpStatusCode.RequestTimeout || (int)status >= 500)

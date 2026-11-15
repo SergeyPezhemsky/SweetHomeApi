@@ -219,6 +219,16 @@ public class FinanceLogicTests
     }
 
     [Fact]
+    public void ExampleTotalIsComparedAsValueNotSubstring()
+    {
+        var parsed = ReceiptRecognitionParser.Parse(
+            """{"isReceipt": true, "store": "название магазина или организации, null если не видно", "total": 11300, "items": [{"name": "A", "amount": 11234.56}]}""");
+
+        Assert.Equal(11300m, parsed!.Total);
+        Assert.Null(parsed.Store);
+    }
+
+    [Fact]
     public void ManyUnclosedBracesAreParsedQuickly()
     {
         var watch = System.Diagnostics.Stopwatch.StartNew();

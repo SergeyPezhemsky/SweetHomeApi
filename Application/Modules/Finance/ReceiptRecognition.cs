@@ -269,7 +269,9 @@ public static class ReceiptRecognitionParser
             // её превращаем в null при чтении.
             if (json.Contains(ReceiptRecognitionPrompt.ItemPlaceholder, StringComparison.Ordinal)
                 || (json.Contains(ReceiptRecognitionPrompt.StorePlaceholder, StringComparison.Ordinal)
-                    && json.Contains(ReceiptRecognitionPrompt.ExampleTotal, StringComparison.Ordinal)))
+                    && TryGetProperty(root, "total", out var total)
+                    && total.ValueKind == JsonValueKind.Number
+                    && total.GetRawText() == ReceiptRecognitionPrompt.ExampleTotal))
                 return -1;
 
             var score = ReceiptKeys.Count(key => TryGetProperty(root, key, out _));
