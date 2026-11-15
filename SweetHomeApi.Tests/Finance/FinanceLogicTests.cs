@@ -183,6 +183,41 @@ public class FinanceLogicTests
         Assert.Equal(300m, parsed.Total);
     }
 
+    private const string FullAnswer = """{"isReceipt": true, "store": "Магнит", "total": 1520, "items": [{"name": "A", "amount": 1000, "category": "HOME"}, {"name": "B", "amount": 520, "category": "PETS"}]}""";
+
+    [Theory]
+    [InlineData("""{"isReceipt": true, "store": "Магнит",""" + "\n")]
+    [InlineData("""{"total": 1500, "items": [""")]
+    [InlineData("""{"isReceipt": true, "store": "название магазина или организации, null если не видно",""" + "\n")]
+    public void AbandonedObjectBeforeFullAnswerDoesNotSwallowIt(string prefix)
+    {
+        var parsed = ReceiptRecognitionParser.Parse(prefix + FullAnswer);
+
+        Assert.Equal(1520m, parsed!.Total);
+        Assert.Equal(2, parsed.Items.Count);
+        Assert.False(parsed.Repaired);
+    }
+
+    [Fact]
+    public void TruncatedRepeatDoesNotBeatFullAnswer()
+    {
+        var parsed = ReceiptRecognitionParser.Parse(FullAnswer + "\n" + FullAnswer[..90]);
+
+        Assert.Equal(1520m, parsed!.Total);
+        Assert.Equal(2, parsed.Items.Count);
+    }
+
+    [Fact]
+    public void CopiedFieldDescriptionsDoNotSpoilAnswer()
+    {
+        var parsed = ReceiptRecognitionParser.Parse(
+            """{"isReceipt": true, "store": "название магазина или организации, null если не видно", "currency": "код валюты ISO 4217, например RUB", "total": 300}""");
+
+        Assert.Null(parsed!.Store);
+        Assert.Equal("RUB", parsed.Currency);
+        Assert.Equal(300m, parsed.Total);
+    }
+
     [Fact]
     public void ManyUnclosedBracesAreParsedQuickly()
     {

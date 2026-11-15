@@ -32,6 +32,7 @@ public static class ReceiptRecognitionPrompt
     /// <summary>Значения-заглушки из примера схемы: объект с ними — эхо промпта, а не ответ.</summary>
     public const string StorePlaceholder = "название магазина или организации, null если не видно";
     public const string ItemPlaceholder = "название позиции как на чеке";
+    public const string ExampleTotal = "1234.56";
 
     private static string BuildSystem()
     {
@@ -46,7 +47,7 @@ public static class ReceiptRecognitionPrompt
               "store": "{{StorePlaceholder}}",
               "date": "дата покупки YYYY-MM-DD, null если не видно",
               "currency": "код валюты ISO 4217, например RUB",
-              "total": 1234.56,
+              "total": {{ExampleTotal}},
               "category": "код категории для чека целиком",
               "items": [
                 { "name": "{{ItemPlaceholder}}", "quantity": 1, "price": 99.90, "amount": 99.90, "category": "код категории" }
@@ -120,7 +121,7 @@ public static class ReceiptRecognitionParser
             var result = new RecognizedReceipt
             {
                 IsReceipt = GetBool(root, "isReceipt") ?? true,
-                Store = CleanText(GetString(root, "store"), FinanceDefaults.MaxStoreLength),
+                Store = CleanStore(GetString(root, "store")),
                 Date = ParseDate(GetString(root, "date")),
                 Currency = NormalizeCurrency(GetString(root, "currency")),
                 Total = PositiveAmount(GetDecimal(root, "total")),
@@ -161,7 +162,8 @@ public static class ReceiptRecognitionParser
     private const int MaxObjectStarts = 200;
     private const int MaxRepairAttempts = 3;
 
-    private static readonly string[] ReceiptKeys = ["isReceipt", "total", "items", "store", "date", "currency", "category"];
+    /// <summary>Ключи, по которым объект узнаётся как чек. «category» есть и у позиции, поэтому считается только вместе с ними.</summary>
+    private static readonly string[] ReceiptKeys = ["isReceipt", "total", "items", "store", "date", "currency"];
 
     public static string? ExtractJsonObject(string? text) => Extract(text)?.Json;
 
@@ -223,24 +225,25 @@ public static class ReceiptRecognitionParser
         // Внешний незакрытый объект — корень оборванного ответа; если не достраивается — пробуем следующий.
         foreach (var start in unclosed.Take(MaxRepairAttempts))
         {
-            var repaired = RepairTruncated(text, start);
-            if (repaired is not null)
+            if (RepairTruncated(text, start) is { } repaired)
             {
-                candidates.Add((start, text.Length, repaired, true));
+                // Диапазон — только использованный префикс: полные объекты после точки обрезки остаются кандидатами.
+                candidates.Add((start, repaired.End, repaired.Json, true));
                 break;
             }
         }
 
-        var roots = candidates
-            .Where(c => !candidates.Any(o => o != c && o.Start <= c.Start && c.End <= o.End && (o.Start < c.Start || c.End < o.End)))
-            .ToList();
-        if (roots.Count == 0)
+        if (candidates.Count == 0)
             return null;
 
-        var best = roots
+        // Полные объекты внутри достроенного (позиции оборванного ответа) не отбрасываем заранее: у позиции
+        // нет ключей чека, и ранжирование само отдаст первенство чеку. При равенстве полный ответ надёжнее
+        // достроенного (обрезанный повтор не должен терять позиции), затем — более поздний.
+        var best = candidates
             .Select(c => (Candidate: c, Score: ReceiptScore(c.Json)))
             .Where(x => x.Score >= 0)
             .OrderByDescending(x => x.Score)
+            .ThenBy(x => x.Candidate.Repaired)
             .ThenByDescending(x => x.Candidate.Start)
             .Select(x => x.Candidate)
             .FirstOrDefault();
@@ -262,11 +265,15 @@ public static class ReceiptRecognitionParser
             if (root.ValueKind != JsonValueKind.Object)
                 return -1;
 
-            if (json.Contains(ReceiptRecognitionPrompt.StorePlaceholder, StringComparison.Ordinal)
-                || json.Contains(ReceiptRecognitionPrompt.ItemPlaceholder, StringComparison.Ordinal))
+            // Эхо примера — по заглушке позиции; заглушку магазина модель может скопировать в настоящий ответ,
+            // её превращаем в null при чтении.
+            if (json.Contains(ReceiptRecognitionPrompt.ItemPlaceholder, StringComparison.Ordinal)
+                || (json.Contains(ReceiptRecognitionPrompt.StorePlaceholder, StringComparison.Ordinal)
+                    && json.Contains(ReceiptRecognitionPrompt.ExampleTotal, StringComparison.Ordinal)))
                 return -1;
 
-            return ReceiptKeys.Count(key => TryGetProperty(root, key, out _));
+            var score = ReceiptKeys.Count(key => TryGetProperty(root, key, out _));
+            return score > 0 && TryGetProperty(root, "category", out _) ? score + 1 : score;
         }
         catch (Exception ex) when (ex is JsonException or InvalidOperationException)
         {
@@ -313,7 +320,7 @@ public static class ReceiptRecognitionParser
     /// Достраивает оборванный JSON: идём назад по закрывающим скобкам и пробуем «обрезать здесь
     /// и закрыть всё открытое». Первая удачная попытка сохраняет максимум целых значений.
     /// </summary>
-    private static string? RepairTruncated(string text, int start)
+    private static (string Json, int End)? RepairTruncated(string text, int start)
     {
         var attempts = 0;
         for (var cut = text.Length - 1; cut > start && attempts < 300; cut--)
@@ -358,7 +365,7 @@ public static class ReceiptRecognitionParser
 
             var candidate = builder.ToString();
             if (IsValidJson(candidate))
-                return candidate;
+                return (candidate, cut + 1);
         }
 
         return null;
@@ -389,9 +396,14 @@ public static class ReceiptRecognitionParser
             return FinanceDefaults.Currency;
 
         var code = value.Trim().TrimEnd('.').ToUpperInvariant();
+        // Модель скопировала описание поля из схемы («код валюты ISO 4217, например RUB») — валюту не определила.
+        if (code.Contains("ISO 4217", StringComparison.Ordinal))
+            return FinanceDefaults.Currency;
+
         switch (code)
         {
-            case "₽" or "Р" or "РУБ" or "РУБЛЬ" or "РУБЛЕЙ" or "RUR" or "RUB" or "RUBLE" or "RUBLES":
+            // «P» латиницей — частая замена знака рубля на кассовых лентах.
+            case "₽" or "Р" or "P" or "РУБ" or "РУБЛЬ" or "РУБЛЕЙ" or "RUR" or "RUB" or "RUBLE" or "RUBLES":
                 return FinanceDefaults.Currency;
             case "$" or "US$" or "USD" or "ДОЛЛ" or "ДОЛЛАР":
                 return "USD";
@@ -580,6 +592,15 @@ public static class ReceiptRecognitionParser
             JsonValueKind.String => ParseAmount(value.GetString(), maxFractionDigits),
             _ => null
         };
+    }
+
+    /// <summary>Магазин; скопированное из схемы описание поля («название магазина…») — значит, магазин не виден.</summary>
+    private static string? CleanStore(string? value)
+    {
+        var store = CleanText(value, FinanceDefaults.MaxStoreLength);
+        return store is not null && store.StartsWith("название магазина", StringComparison.OrdinalIgnoreCase)
+            ? null
+            : store;
     }
 
     private static string? CleanText(string? value, int maxLength)
