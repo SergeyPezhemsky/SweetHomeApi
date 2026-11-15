@@ -34,8 +34,8 @@ public class AnthropicReceiptRecognizer(HttpClient httpClient, IOptions<Anthropi
         };
         if (settings.ResolveThinking() is { } thinking)
             payload["thinking"] = new { type = thinking };
-        if (!string.IsNullOrWhiteSpace(settings.Effort))
-            payload["output_config"] = new { effort = settings.Effort.Trim().ToLowerInvariant() };
+        if (settings.ResolveEffort() is { } effort)
+            payload["output_config"] = new { effort };
 
         using var request = new HttpRequestMessage(HttpMethod.Post, $"{settings.BaseUrl.TrimEnd('/')}/v1/messages");
         request.Headers.TryAddWithoutValidation("x-api-key", settings.ApiKey!.Trim());

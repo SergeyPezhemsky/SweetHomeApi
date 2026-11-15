@@ -14,7 +14,8 @@ public class FinanceRecognitionWorker(
     FinanceRecognitionQueue queue,
     IServiceScopeFactory scopeFactory,
     IOptions<ReceiptRecognitionOptions> options,
-    ILogger<FinanceRecognitionWorker> logger) : BackgroundService
+    ILogger<FinanceRecognitionWorker> logger,
+    IOptions<AnthropicRecognitionOptions>? anthropicOptions = null) : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -32,6 +33,11 @@ public class FinanceRecognitionWorker(
         // Yandex без каталога пропускается молча, если работает другой провайдер, — предупредим при старте.
         if (options.Value.MissingYandexFolder && RecognizerOrder.Includes(options.Value.Order, OpenAiCompatibleReceiptRecognizer.ProviderName))
             logger.LogWarning("Yandex recognition is skipped: Finance:Recognition:Project (Yandex folder id) is empty");
+
+        var anthropic = anthropicOptions ?? Options.Create(new AnthropicRecognitionOptions());
+        if (anthropic.Value.HasInvalidEffort)
+            logger.LogWarning("Finance:Recognition:Anthropic:Effort '{Effort}' is not one of low/medium/high/xhigh/max and is ignored",
+                anthropic.Value.Effort);
 
         await EnqueuePendingAsync(stoppingToken);
 

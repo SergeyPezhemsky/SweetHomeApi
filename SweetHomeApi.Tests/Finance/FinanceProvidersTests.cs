@@ -145,14 +145,32 @@ public class FinanceProvidersTests
     }
 
     [Theory]
-    [InlineData("claude-haiku-5-5", "auto", "disabled")]
-    [InlineData("claude-sonnet-5-5", "auto", "between_tools")]
-    [InlineData("claude-opus-5-5", "auto", null)]
-    [InlineData("claude-opus-5-5", "adaptive", "adaptive")]
-    [InlineData("claude-haiku-5-5", "omit", null)]
-    public void ThinkingModeDependsOnModel(string model, string mode, string? expected)
+    [InlineData("claude-haiku-5-5", "auto", null, "disabled")]
+    [InlineData("claude-sonnet-5-5", "auto", null, "between_tools")]
+    [InlineData("claude-opus-5-5", "auto", null, null)]
+    [InlineData("claude-fable-5-2", "auto", null, null)]
+    [InlineData("claude-sonnet-5", "auto", null, "disabled")]
+    [InlineData("claude-sonnet-4-6", "auto", null, "disabled")]
+    [InlineData("claude-opus-5", "auto", null, "disabled")]
+    [InlineData("claude-haiku-5-5", "auto", "max", null)]
+    [InlineData("claude-sonnet-5-5", "auto", "xhigh", null)]
+    [InlineData("claude-opus-5-5", "adaptive", null, "adaptive")]
+    [InlineData("claude-haiku-5-5", "omit", null, null)]
+    public void ThinkingModeDependsOnModelAndEffort(string model, string mode, string? effort, string? expected)
     {
-        Assert.Equal(expected, new AnthropicRecognitionOptions { Model = model, Thinking = mode }.ResolveThinking());
+        Assert.Equal(expected, new AnthropicRecognitionOptions { Model = model, Thinking = mode, Effort = effort }.ResolveThinking());
+    }
+
+    [Theory]
+    [InlineData("High", "high")]
+    [InlineData("max", "max")]
+    [InlineData("adaptive", null)]
+    [InlineData("", null)]
+    public void InvalidEffortIsNotSent(string effort, string? expected)
+    {
+        var options = new AnthropicRecognitionOptions { Effort = effort };
+        Assert.Equal(expected, options.ResolveEffort());
+        Assert.Equal(effort is "adaptive", options.HasInvalidEffort);
     }
 
     [Fact]

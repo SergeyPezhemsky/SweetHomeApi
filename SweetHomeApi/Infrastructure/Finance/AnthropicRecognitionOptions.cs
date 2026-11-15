@@ -36,24 +36,43 @@ public class AnthropicRecognitionOptions
     /// </summary>
     public string Thinking { get; set; } = "auto";
 
-    /// <summary>Глубина рассуждений (output_config.effort): low / medium / high. Пусто — по умолчанию модели.</summary>
+    /// <summary>Глубина рассуждений (output_config.effort): low / medium / high / xhigh / max. Пусто — по умолчанию модели.</summary>
     public string? Effort { get; set; }
 
-    /// <summary>Значение поля thinking для запроса; null — поле не передаём.</summary>
+    private static readonly string[] Efforts = ["low", "medium", "high", "xhigh", "max"];
+
+    /// <summary>Effort для запроса; неизвестное значение не передаём (иначе каждый запрос — 400).</summary>
+    public string? ResolveEffort()
+    {
+        var effort = Effort?.Trim().ToLowerInvariant();
+        return effort is not null && Efforts.Contains(effort) ? effort : null;
+    }
+
+    public bool HasInvalidEffort => !string.IsNullOrWhiteSpace(Effort) && ResolveEffort() is null;
+
+    /// <summary>
+    /// Значение поля thinking для запроса; null — поле не передаём (adaptive).
+    /// auto сверено с документацией моделей: between_tools принимает только Sonnet 5.5, у Opus 5.5 / Fable / Mythos
+    /// рассуждения всегда включены, остальные (Haiku 5.5 и модели до 5.5) принимают disabled. При effort xhigh/max
+    /// ни disabled, ни between_tools не принимаются — тогда adaptive.
+    /// </summary>
     public string? ResolveThinking()
     {
         var mode = (Thinking ?? "auto").Trim().ToLowerInvariant();
         if (mode is "disabled" or "between_tools" or "adaptive")
             return mode;
-        if (mode is "omit" or "none" or "")
+        if (mode is "omit" or "none")
             return null;
 
         var model = (Model ?? string.Empty).ToLowerInvariant();
-        if (model.Contains("haiku", StringComparison.Ordinal))
-            return "disabled";
-        if (model.Contains("sonnet", StringComparison.Ordinal))
+        if (ResolveEffort() is "xhigh" or "max"
+            || model.Contains("opus-5-5", StringComparison.Ordinal)
+            || model.Contains("fable", StringComparison.Ordinal)
+            || model.Contains("mythos", StringComparison.Ordinal))
+            return null;
+        if (model.Contains("sonnet-5-5", StringComparison.Ordinal))
             return "between_tools";
-        return null;
+        return "disabled";
     }
 
     public int MaxResponseBytes { get; set; } = 2 * 1024 * 1024;
