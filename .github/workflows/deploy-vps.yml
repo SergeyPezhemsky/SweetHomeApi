@@ -146,11 +146,18 @@ jobs:
             git reset --hard origin/master
             # Сначала API и база: их выкатка не ждёт тяжёлый образ и не зависит от него.
             docker compose up -d --build api postgres
-            # Удаление фона — отдельно и без остановки деплоя: если сборка не удалась,
-            # API работает, фото просто остаются без обработки (повторить можно в форме вещи).
-            if timeout 45m docker compose build flatlay; then
-              docker compose up -d flatlay
+            # Сравниваем содержимое flatlay/ с версией локального образа. Если сборка
+            # не удалась или образ удалён, следующий деплой попробует собрать его снова.
+            flatlay_revision=$(git rev-parse HEAD:flatlay)
+            flatlay_image=$(docker compose config --images flatlay)
+            built_revision=$(docker image inspect --format '{{ index .Config.Labels "io.sweethome.flatlay.source-revision" }}' "$flatlay_image" 2>/dev/null || true)
+
+            if [ "$built_revision" = "$flatlay_revision" ]; then
+              echo "Flatlay image is current; skipping build"
+              docker compose up -d --no-build --pull never flatlay
+            elif timeout 45m docker compose build --build-arg "FLATLAY_SOURCE_REVISION=$flatlay_revision" flatlay; then
+              docker compose up -d --no-build --pull never flatlay
             else
-              echo "WARNING: flatlay image build failed, background removal is unavailable"
+              echo "WARNING: flatlay image build failed; keeping the existing deployment"
             fi
             docker image prune -f
