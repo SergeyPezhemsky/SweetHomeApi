@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using Application.Modules.Finance.Seeds;
 
 namespace Application.Modules.Finance;
@@ -11,6 +12,8 @@ public class RecognizedReceipt
     public bool IsReceipt { get; set; }
     public string? Store { get; set; }
     public DateOnly? Date { get; set; }
+    public (int Month, int Day)? DateWithoutYear { get; set; }
+    public int? RelativeDays { get; set; }
     public string Currency { get; set; } = FinanceDefaults.Currency;
     public decimal? Total { get; set; }
     public FinanceCategory? Category { get; set; }
@@ -21,13 +24,14 @@ public class RecognizedReceipt
 }
 
 public record RecognizedItem(string Name, decimal? Quantity, decimal? Price, decimal Amount, FinanceCategory Category);
+public record RecognizedDocument(IReadOnlyList<RecognizedReceipt> Receipts, bool IsBankScreenshot = false);
 
 /// <summary>Промпт для vision-модели: какие поля и категории вернуть.</summary>
 public static class ReceiptRecognitionPrompt
 {
     public static string System { get; } = BuildSystem();
 
-    public const string User = "Распознай чек на фото и верни JSON строго по схеме.";
+    public const string User = "Распознай чек или покупки на скриншоте банка и верни JSON строго по схеме.";
 
     /// <summary>Значения-заглушки из примера схемы: объект с ними — эхо промпта, а не ответ.</summary>
     public const string StorePlaceholder = "название магазина или организации, null если не видно";
@@ -38,14 +42,14 @@ public static class ReceiptRecognitionPrompt
     {
         var categories = string.Join('\n', FinanceDictionaries.Categories.Select(x => $"- {x.Code}: {x.Name} — {x.Hint}"));
         return $$"""
-            Ты распознаёшь кассовые чеки, квитанции и скриншоты оплат на фото.
+            Ты распознаёшь кассовые чеки, квитанции, скриншоты оплаты и историю покупок в банке.
             Ответь ТОЛЬКО одним JSON-объектом без пояснений и без markdown.
 
-            Схема:
+            Схема для одного чека или отдельной оплаты:
             {
               "isReceipt": true,
               "store": "{{StorePlaceholder}}",
-              "date": "дата покупки YYYY-MM-DD, null если не видно",
+              "date": "дата покупки, null если не видно",
               "currency": "код валюты ISO 4217, например RUB",
               "total": {{ExampleTotal}},
               "category": "код категории для чека целиком",
@@ -54,13 +58,25 @@ public static class ReceiptRecognitionPrompt
               ]
             }
 
+            Для истории операций банка верни один объект {"purchases": [...]}.
+            Каждый элемент purchases — одна отдельная покупка с полями store, date, currency, total, category.
+            - Бери только завершённые списания за товары и услуги с читаемой суммой. Не включай пополнения, переводы,
+              возвраты, кешбэк, отклонённые и ожидающие операции. Не бери баланс и итоги за день.
+            - Если несколько покупок идут под одним заголовком с датой, повтори эту дату в каждой покупке.
+              Не объединяй покупки, даже если у них совпадают магазин, дата и сумма.
+            - total — положительная сумма одной покупки; items для истории операций не нужны.
+
             Правила:
+            - Даты: если год явно указан, верни YYYY-MM-DD. Если видны только день и месяц, верни DD.MM.
+              Например, «07.11 18:32» означает "07.11": 18:32 — время, не год. Год никогда не додумывай.
+              Если день указан словами («15 ноября»), переведи его в DD.MM без года.
+              Если видны только «Сегодня» или «Вчера», верни это слово. Если нет даты, верни null.
             - total — итоговая сумма к оплате (строка «ИТОГ», «К оплате», «Итого»). Числа — без пробелов, с точкой.
             - amount — сумма позиции после скидки на эту позицию. Если скидка на весь чек напечатана отдельной строкой,
               добавь её как позицию с отрицательной суммой.
             - Не добавляй в items строки итогов, НДС, сдачи, способа оплаты, бонусов.
             - Если позиции не видны (например, скриншот перевода), верни пустой items и укажи total и category.
-            - Если на фото нет чека или оплаты, верни {"isReceipt": false}.
+            - Если на фото нет чека или оплаты либо в истории нет покупок, верни {"isReceipt": false}.
             - category — один из кодов:
             {{categories}}
             """;
@@ -73,7 +89,13 @@ public static class ReceiptRecognitionPrompt
 /// </summary>
 public static class ReceiptRecognitionParser
 {
-    public static RecognizedReceipt? Parse(string? response)
+    public const int MaxPurchases = 100;
+    private const string PurchasesKey = "purchases";
+
+    public static RecognizedReceipt? Parse(string? response) =>
+        ParseDocument(response) is { IsBankScreenshot: false } document ? document.Receipts[0] : null;
+
+    public static RecognizedDocument? ParseDocument(string? response)
     {
         var extracted = Extract(response);
         if (extracted is null)
@@ -99,10 +121,29 @@ public static class ReceiptRecognitionParser
         {
             using (document)
             {
-                var receipt = ReadReceipt(document.RootElement);
-                if (receipt is not null)
-                    receipt.Repaired = repaired;
-                return receipt;
+                var root = document.RootElement;
+                if (TryGetProperty(root, PurchasesKey, out var purchases))
+                {
+                    // От обрезанной истории нельзя сохранять только первые покупки: часть затрат потеряется.
+                    if (repaired || purchases.ValueKind != JsonValueKind.Array
+                                 || purchases.GetArrayLength() is 0 or > MaxPurchases)
+                        return null;
+
+                    var receipts = new List<RecognizedReceipt>(purchases.GetArrayLength());
+                    foreach (var purchase in purchases.EnumerateArray())
+                    {
+                        if (ReadReceipt(purchase, readItems: false) is not { IsReceipt: true, Total: > 0 } receipt)
+                            return null;
+                        receipts.Add(receipt);
+                    }
+
+                    return new RecognizedDocument(receipts, IsBankScreenshot: true);
+                }
+
+                if (ReadReceipt(root) is not { } single)
+                    return null;
+                single.Repaired = repaired;
+                return new RecognizedDocument([single]);
             }
         }
         catch (InvalidOperationException)
@@ -112,23 +153,26 @@ public static class ReceiptRecognitionParser
         }
     }
 
-    private static RecognizedReceipt? ReadReceipt(JsonElement root)
+    private static RecognizedReceipt? ReadReceipt(JsonElement root, bool readItems = true)
     {
         {
             if (root.ValueKind != JsonValueKind.Object)
                 return null;
 
+            var rawDate = GetString(root, "date");
             var result = new RecognizedReceipt
             {
                 IsReceipt = GetBool(root, "isReceipt") ?? true,
                 Store = CleanStore(GetString(root, "store")),
-                Date = ParseDate(GetString(root, "date")),
+                Date = ParseDate(rawDate),
+                DateWithoutYear = ParseDateWithoutYear(rawDate),
+                RelativeDays = rawDate?.Trim().ToLowerInvariant() switch { "сегодня" => 0, "вчера" => -1, _ => null },
                 Currency = NormalizeCurrency(GetString(root, "currency")),
                 Total = PositiveAmount(GetDecimal(root, "total")),
                 Category = ParseCategory(GetString(root, "category"))
             };
 
-            if (TryGetProperty(root, "items", out var items) && items.ValueKind == JsonValueKind.Array)
+            if (readItems && TryGetProperty(root, "items", out var items) && items.ValueKind == JsonValueKind.Array)
             {
                 foreach (var item in items.EnumerateArray())
                 {
@@ -273,6 +317,10 @@ public static class ReceiptRecognitionParser
                     && total.ValueKind == JsonValueKind.Number
                     && total.GetRawText() == ReceiptRecognitionPrompt.ExampleTotal))
                 return -1;
+
+            // История — целый ответ; отдельные покупки внутри незакрытого массива не заменяют её.
+            if (TryGetProperty(root, PurchasesKey, out _))
+                return ReceiptKeys.Length + 2;
 
             var score = ReceiptKeys.Count(key => TryGetProperty(root, key, out _));
             return score > 0 && TryGetProperty(root, "category", out _) ? score + 1 : score;
@@ -433,21 +481,32 @@ public static class ReceiptRecognitionParser
         return code.Length == 3 && code.All(c => c is >= 'A' and <= 'Z') ? code : UnknownCurrency;
     }
 
+    private static readonly Regex DateTimeSuffix = new(
+        @"(?:[Tt]|\s*[.,]\s*|\s+)[0-9]{1,2}:[0-9]{2}(?::[0-9]{2}(?:[.,][0-9]+)?)?(?:\s*(?:Z|[+-][0-9]{2}:?[0-9]{2}))?$",
+        RegexOptions.CultureInvariant);
+
+    private static string DateText(string value) => DateTimeSuffix.Replace(value.Trim(), "").TrimEnd('.');
+
     public static DateOnly? ParseDate(string? value)
     {
-        if (string.IsNullOrWhiteSpace(value))
+        if (value is null || value.Length > 80 || string.IsNullOrWhiteSpace(value))
             return null;
 
-        var text = value.Trim();
-        // Время после даты не нужно: «2026-11-14T18:32», «14.11.2026 18:32».
-        var cut = text.IndexOfAny(['T', ' ']);
-        if (cut > 0)
-            text = text[..cut];
-
+        var text = DateText(value);
         string[] formats = ["yyyy-MM-dd", "dd.MM.yyyy", "d.M.yyyy", "dd.MM.yy", "d.M.yy", "yyyy.MM.dd", "dd/MM/yyyy", "dd-MM-yyyy"];
         return DateOnly.TryParseExact(text, formats, CultureInfo.InvariantCulture, DateTimeStyles.None, out var date)
             ? date
             : null;
+    }
+
+    private static (int Month, int Day)? ParseDateWithoutYear(string? value)
+    {
+        if (value is null || value.Length > 80 || string.IsNullOrWhiteSpace(value))
+            return null;
+
+        // Високосный год здесь только для проверки пары день/месяц; настоящий год определит сервис.
+        return DateOnly.TryParseExact(DateText(value) + ".2000", "d.M.yyyy", CultureInfo.InvariantCulture,
+            DateTimeStyles.None, out var date) ? (date.Month, date.Day) : null;
     }
 
     /// <summary>

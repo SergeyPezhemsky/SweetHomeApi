@@ -314,6 +314,8 @@ public class FinanceController(
         {
             FinanceOperationStatus.NotFound => NotFound(ReceiptNotFound()),
             FinanceOperationStatus.NoImage => NotFound(Error("FINANCE_IMAGE_NOT_FOUND", "У чека нет фото")),
+            FinanceOperationStatus.AlreadyImported => Conflict(
+                Error("FINANCE_SCREENSHOT_ALREADY_IMPORTED", "Покупки со скриншота уже добавлены. Расходы можно исправить вручную.")),
             FinanceOperationStatus.Disabled => StatusCode(StatusCodes.Status503ServiceUnavailable,
                 Error("FINANCE_RECOGNITION_DISABLED", "Распознавание чеков выключено")),
             _ => Ok(ToDto(result.Value!, includeItems: true))

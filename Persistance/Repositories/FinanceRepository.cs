@@ -115,13 +115,15 @@ public class FinanceRepository(SweetHomeDbContext context) : IFinanceRepository
         await using var transaction = await context.Database.BeginTransactionAsync();
         await LockReceiptAsync(receiptId);
 
-        var hasImage = await context.FinanceReceipts
+        var receipt = await context.FinanceReceipts
             .Where(x => x.Id == receiptId && x.UserId == userId)
-            .Select(x => (bool?)x.HasImage)
+            .Select(x => new { x.HasImage, x.Source })
             .FirstOrDefaultAsync();
-        if (hasImage is null)
+        if (receipt is null)
             return FinanceOperationStatus.NotFound;
-        if (hasImage == false)
+        if (receipt.Source == FinanceReceiptSource.BANK_SCREENSHOT)
+            return FinanceOperationStatus.AlreadyImported;
+        if (!receipt.HasImage)
             return FinanceOperationStatus.NoImage;
 
         await context.FinanceReceipts
@@ -169,13 +171,16 @@ public class FinanceRepository(SweetHomeDbContext context) : IFinanceRepository
                 pending.PurchasedOn, pending.Data, pending.ContentType);
     }
 
-    public async Task<bool> CompleteRecognitionAsync(string receiptId, int revision, FinanceRecognitionResult result, DateTime updatedAt)
+    public async Task<bool> CompleteRecognitionAsync(FinancePendingRecognition pending, FinanceRecognitionBatch batch, DateTime updatedAt)
     {
+        var receiptId = pending.ReceiptId;
+        var result = batch.Receipts[0];
         await using var transaction = await context.Database.BeginTransactionAsync();
         await LockReceiptAsync(receiptId);
 
         var updated = await context.FinanceReceipts
-            .Where(x => x.Id == receiptId && x.Revision == revision && x.Status == FinanceReceiptStatus.PENDING)
+            .Where(x => x.Id == receiptId && x.UserId == pending.UserId && x.Revision == pending.Revision
+                        && x.Status == FinanceReceiptStatus.PENDING)
             .ExecuteUpdateAsync(setters => setters
                 .SetProperty(x => x.PurchasedOn, result.PurchasedOn)
                 .SetProperty(x => x.Store, result.Store)
@@ -184,13 +189,25 @@ public class FinanceRepository(SweetHomeDbContext context) : IFinanceRepository
                 .SetProperty(x => x.Category, result.Category)
                 .SetProperty(x => x.Status, FinanceReceiptStatus.READY)
                 .SetProperty(x => x.FailureReason, (FinanceFailureReason?)null)
-                .SetProperty(x => x.RecognitionJson, result.RawJson)
-                .SetProperty(x => x.RecognitionModel, result.Model)
+                .SetProperty(x => x.Source, x => batch.IsBankScreenshot ? FinanceReceiptSource.BANK_SCREENSHOT : x.Source)
+                .SetProperty(x => x.RecognitionJson, batch.RawJson)
+                .SetProperty(x => x.RecognitionModel, batch.Model)
                 .SetProperty(x => x.UpdatedAt, updatedAt));
         if (updated == 0)
             return false;
 
         await ReplaceItemsAsync(receiptId, result.Items);
+        if (batch.Receipts.Count > 1)
+        {
+            // Снимок хранится один раз в исходной записи. Покупки можно удалять и исправлять по отдельности.
+            var additional = new List<FinanceReceipt>(batch.Receipts.Count - 1);
+            foreach (var purchase in batch.Receipts.Skip(1))
+                additional.Add(batch.CreateAdditionalReceipt(pending, purchase, await NextRevisionAsync(), updatedAt));
+            context.FinanceReceipts.AddRange(additional);
+            await context.SaveChangesAsync();
+            foreach (var purchase in additional)
+                context.Entry(purchase).State = EntityState.Detached;
+        }
         await transaction.CommitAsync();
         return true;
     }

@@ -119,6 +119,25 @@ public class FinanceLogicTests
     }
 
     [Theory]
+    [InlineData("14.11 18:32", 2026, 11, 15, 2026, 11, 14)]
+    [InlineData("14.11.23:32", 2026, 11, 15, 2026, 11, 14)]
+    [InlineData("4.1, 9:05:02", 2027, 1, 5, 2027, 1, 4)]
+    [InlineData("31.12 20:26", 2027, 1, 2, 2026, 12, 31)]
+    [InlineData("14.11.2025 18:32", 2026, 11, 15, 2025, 11, 14)]
+    [InlineData("2026-11-14T18:32:02+03:00", 2026, 11, 15, 2026, 11, 14)]
+    [InlineData("Вчера", 2027, 1, 1, 2026, 12, 31)]
+    [InlineData("31.02 19:03", 2026, 11, 15, 2026, 11, 15)]
+    public void RecognitionResolvesDateWithoutUsingTimeAsYear(string date, int year, int month, int day,
+        int expectedYear, int expectedMonth, int expectedDay)
+    {
+        var parsed = ReceiptRecognitionParser.Parse(System.Text.Json.JsonSerializer.Serialize(new { total = 10, date }));
+        var (result, _) = FinanceService.BuildRecognitionResult(parsed, new DateOnly(year, month, day),
+            new Dictionary<string, FinanceCategory>());
+
+        Assert.Equal(new DateOnly(expectedYear, expectedMonth, expectedDay), result!.PurchasedOn);
+    }
+
+    [Theory]
     [InlineData(null)]
     [InlineData("")]
     [InlineData("Не могу прочитать чек")]

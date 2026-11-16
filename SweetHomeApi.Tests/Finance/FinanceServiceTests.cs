@@ -19,6 +19,14 @@ public class FinanceServiceTests
          ]}
         """;
 
+    private const string BankScreenshot = """
+        {"purchases": [
+          {"store":"Кофейня","date":"01.11 12:30","total":"250,50","category":"CAFE"},
+          {"store":"Кофейня","date":"01.11 12:30","total":"250,50","category":"CAFE"},
+          {"store":"Магазин","date":"31.10 21:43","total":800,"category":"GROCERIES"}
+        ]}
+        """;
+
     [Fact]
     public async Task UploadQueuesRecognitionWhenEnabled()
     {
@@ -71,6 +79,77 @@ public class FinanceServiceTests
         Assert.Equal(900m, summary.Total);
         Assert.Equal(540m, summary.Categories.Single(x => x.Category == FinanceCategory.GROCERIES).Amount);
         Assert.Equal(360m, summary.Categories.Single(x => x.Category == FinanceCategory.HOME).Amount);
+    }
+
+    [Fact]
+    public async Task WorkerStoresBankPurchasesSeparatelyInTheirMonthsWithoutDuplicatingBatch()
+    {
+        var (repository, service, upload) = await UploadAsync();
+        var recognizer = new FakeRecognizer(_ => Task.FromResult(BankScreenshot));
+        var worker = CreateWorker(repository, recognizer);
+
+        await worker.ProcessAsync(upload.Id, CancellationToken.None);
+        await worker.ProcessAsync(upload.Id, CancellationToken.None);
+        var retry = await service.RecognizeAgainAsync(UserId, upload.Id);
+
+        Assert.Equal(1, recognizer.Calls);
+        Assert.Equal(FinanceOperationStatus.AlreadyImported, retry.Status);
+        Assert.Equal(3, repository.Receipts.Count);
+        Assert.Single(repository.Images);
+        Assert.True(repository.Receipts[upload.Id].HasImage);
+        Assert.All(repository.Receipts.Values, purchase =>
+        {
+            Assert.Equal(UserId, purchase.UserId);
+            Assert.Equal(FinanceReceiptSource.BANK_SCREENSHOT, purchase.Source);
+            Assert.Equal(FinanceReceiptStatus.READY, purchase.Status);
+            Assert.Equal(recognizer.Model, purchase.RecognitionModel);
+            Assert.Empty(purchase.Items);
+        });
+
+        var november = await service.GetSummaryAsync(UserId, new FinanceMonth(2026, 11));
+        Assert.Equal(2, november.ReceiptCount);
+        Assert.Equal(501m, november.Total);
+        Assert.Equal(FinanceCategory.CAFE, Assert.Single(november.Categories).Category);
+        var october = await service.GetSummaryAsync(UserId, new FinanceMonth(2026, 10));
+        Assert.Equal(1, october.ReceiptCount);
+        Assert.Equal(800m, october.Total);
+        Assert.Equal(FinanceCategory.GROCERIES, Assert.Single(october.Categories).Category);
+    }
+
+    [Theory]
+    [InlineData("""{"purchases":[{"store":"Кофейня","total":250},{"store":"Магазин","total":""")]
+    [InlineData("""{"purchases":[{"store":"Кофейня","total":250},{"store":"Магазин"}]}""")]
+    public async Task WorkerDoesNotImportPartialBankScreenshot(string response)
+    {
+        var (repository, _, upload) = await UploadAsync();
+        var worker = CreateWorker(repository, new FakeRecognizer(_ => Task.FromResult(response)));
+
+        await worker.ProcessAsync(upload.Id, CancellationToken.None);
+
+        var stored = Assert.Single(repository.Receipts.Values);
+        Assert.Equal(FinanceReceiptStatus.FAILED, stored.Status);
+        Assert.Equal(FinanceFailureReason.UNREADABLE, stored.FailureReason);
+        Assert.Equal(0m, stored.Total);
+    }
+
+    [Fact]
+    public async Task EditDuringBankRecognitionDiscardsAllPurchases()
+    {
+        var (repository, service, upload) = await UploadAsync();
+        var worker = CreateWorker(repository, new FakeRecognizer(async _ =>
+        {
+            await service.UpdateReceiptAsync(UserId, upload.Id, new FinanceReceiptUpdate
+            {
+                PurchasedOn = Today,
+                Total = 42m,
+                Category = FinanceCategory.CAFE
+            });
+            return BankScreenshot;
+        }));
+
+        await worker.ProcessAsync(upload.Id, CancellationToken.None);
+
+        Assert.Equal(42m, Assert.Single(repository.Receipts.Values).Total);
     }
 
     [Fact]

@@ -3,7 +3,7 @@
 ## Goals and non-goals
 - Goal: one action to record spending (photo), one screen to understand the month (total + categories).
 - Goal: keep detailed data (items, quantities, prices, category source, raw model output) for later analysis.
-- Non-goal (v1): shared family budget, incomes, budgets/limits, custom categories, multi-photo receipts, bank imports, FNS QR lookup.
+- Non-goal (v1): shared family budget, incomes, budgets/limits, custom categories, multi-photo receipts, bank account integrations, FNS QR lookup.
 
 ## Data model
 
@@ -46,6 +46,9 @@ Fixed dictionary with codes, Russian names, Material icon and chart colour: GROC
 - Date: recognized date is accepted when it is within [upload date − 3 years, min(upload date + 1, tomorrow UTC)]; if the model gives no or an implausible date, the current receipt date is kept.
 - Parsing is tolerant: `<think>` reasoning blocks, code fences and text around the JSON are ignored (see answer selection above). Amount strings: spaces, NBSP, «р.»/«руб.», `−` (U+2212) and other dashes; a separator is decimal only when followed by 1–2 digits (3 for quantity); letters between digits make the value invalid. Unknown categories become `OTHER`; items without a name or non-zero amount are dropped; at most 150 items. Text is cleaned of control characters and lone surrogates and truncated on a surrogate boundary.
 - After parsing, user rules override AI categories (`CategorySource = RULE`).
+- A bank purchase history is returned as a JSON object with a `purchases` array containing store, date, currency, total and category for each completed purchase. Each entry needs an explicit positive total. A truncated or invalid array is rejected so only a complete result is saved.
+- The worker saves the first purchase under the upload ID and inserts the remaining purchases in the same revision-guarded transaction. All have source `BANK_SCREENSHOT`; only the first retains the image and raw response. Imported purchases can be edited or deleted individually. Re-recognition of an imported purchase is disabled.
+- If the date contains a day and month without a year, resolve the most recent matching date inside the allowed window. Strip the time before checking the date. Resolve «Сегодня» and «Вчера» from the upload's local date.
 - Total: the model total when present; otherwise the sum of items, unless the answer was repaired (then UNREADABLE). Date: see the date rule above.
 - Worker: one receipt at a time; provider unavailability (network, 429, 5xx) is retried with delay; on final failure status becomes `FAILED` with `PROVIDER_ERROR`; non-receipt photo → `FAILED/NOT_A_RECEIPT`; unparsable → `FAILED/UNREADABLE`; a failure to save the answer → `FAILED/INTERNAL_ERROR` (raw answer kept). If even that write fails (database down), the receipt is re-queued after `InternalRetryDelaySeconds`. On startup PENDING receipts are re-queued; when recognition is disabled they become `FAILED/DISABLED`.
 - Editing a receipt or re-recognition bumps the revision, so an in-flight result is discarded.

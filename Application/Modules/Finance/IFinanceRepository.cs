@@ -31,8 +31,8 @@ public interface IFinanceRepository
     Task<List<string>> GetPendingReceiptIdsAsync();
     Task<FinancePendingRecognition?> GetPendingRecognitionAsync(string receiptId);
 
-    /// <summary>Сохраняет распознанные данные, если чек всё ещё PENDING с той же ревизией.</summary>
-    Task<bool> CompleteRecognitionAsync(string receiptId, int revision, FinanceRecognitionResult result, DateTime updatedAt);
+    /// <summary>Сохраняет весь результат одной транзакцией, если исходный чек всё ещё PENDING с той же ревизией.</summary>
+    Task<bool> CompleteRecognitionAsync(FinancePendingRecognition pending, FinanceRecognitionBatch batch, DateTime updatedAt);
 
     /// <summary>Помечает FAILED, если чек всё ещё PENDING с той же ревизией.</summary>
     Task<bool> FailRecognitionAsync(string receiptId, int revision, FinanceFailureReason reason, string? rawJson, string? model,

@@ -101,8 +101,28 @@ public class FinanceRecognitionResult
     public string Currency { get; set; } = FinanceDefaults.Currency;
     public FinanceCategory Category { get; set; }
     public List<FinanceReceiptItem> Items { get; set; } = [];
-    public string? RawJson { get; set; }
-    public string? Model { get; set; }
+}
+
+public record FinanceRecognitionBatch(
+    IReadOnlyList<FinanceRecognitionResult> Receipts, bool IsBankScreenshot, string? RawJson, string? Model)
+{
+    public FinanceReceipt CreateAdditionalReceipt(FinancePendingRecognition pending, FinanceRecognitionResult purchase,
+        int revision, DateTime now) => new()
+    {
+        UserId = pending.UserId,
+        Source = FinanceReceiptSource.BANK_SCREENSHOT,
+        Status = FinanceReceiptStatus.READY,
+        PurchasedOn = purchase.PurchasedOn,
+        UploadedOn = pending.UploadedOn,
+        Store = purchase.Store,
+        Total = purchase.Total,
+        Currency = purchase.Currency,
+        Category = purchase.Category,
+        RecognitionModel = Model,
+        Revision = revision,
+        CreatedAt = now,
+        UpdatedAt = now
+    };
 }
 
 public enum FinanceOperationStatus
@@ -112,6 +132,7 @@ public enum FinanceOperationStatus
 
     /// <summary>У чека нет фото.</summary>
     NoImage,
+    AlreadyImported,
 
     /// <summary>Распознавание выключено в настройках сервера.</summary>
     Disabled

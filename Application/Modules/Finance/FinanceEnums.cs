@@ -24,7 +24,8 @@ public enum FinanceCategory
 public enum FinanceReceiptSource
 {
     PHOTO,
-    MANUAL
+    MANUAL,
+    BANK_SCREENSHOT
 }
 
 public enum FinanceReceiptStatus

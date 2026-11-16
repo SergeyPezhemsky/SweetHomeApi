@@ -36,6 +36,18 @@ The worker SHALL fill store, date, currency, total, receipt category and items f
 - WHEN a new receipt contains «Корм Purina для щенков 3 кг» recognized as `GROCERIES`
 - THEN the item gets category `PETS` with `categorySource = RULE` (same key «корм purina»).
 
+#### Scenario: Bank screenshot with purchases on different dates
+- GIVEN an uploaded bank history screenshot with multiple completed purchases
+- WHEN recognition returns a complete list
+- THEN each purchase becomes a separate `READY` expense with its own date, total, currency and category.
+- AND the original upload retains the screenshot; repeat recognition of imported purchases returns `409`.
+- AND incoming payments, transfers, refunds and balance figures are excluded.
+
+#### Scenario: Time after a date without a year
+- GIVEN an image uploaded on 2026-11-16
+- WHEN a purchase date reads `14.11 18:32`
+- THEN the purchase is recorded on 2026-11-14.
+
 ### Requirement: Provider fallback
 The worker SHALL try configured providers in `Finance:Recognition:Order`; when a provider fails or cannot read the receipt, the next provider SHALL be tried, and the receipt SHALL record the model that produced the stored answer in `recognitionModel`.
 

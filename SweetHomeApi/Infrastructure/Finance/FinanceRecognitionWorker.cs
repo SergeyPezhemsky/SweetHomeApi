@@ -140,7 +140,7 @@ public class FinanceRecognitionWorker(
             if (attempt.Response is null)
                 continue;
 
-            FinanceRecognitionResult? result;
+            FinanceRecognitionBatch? result;
             FinanceFailureReason? reason;
             try
             {

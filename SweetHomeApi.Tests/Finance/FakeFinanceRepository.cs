@@ -83,6 +83,8 @@ internal sealed class FakeFinanceRepository : IFinanceRepository
     {
         if (!Receipts.TryGetValue(receiptId, out var receipt) || receipt.UserId != userId)
             return Task.FromResult(FinanceOperationStatus.NotFound);
+        if (receipt.Source == FinanceReceiptSource.BANK_SCREENSHOT)
+            return Task.FromResult(FinanceOperationStatus.AlreadyImported);
         if (!receipt.HasImage)
             return Task.FromResult(FinanceOperationStatus.NoImage);
 
@@ -115,7 +117,7 @@ internal sealed class FakeFinanceRepository : IFinanceRepository
             receipt.Id, receipt.UserId, receipt.Revision, receipt.UploadedOn, receipt.PurchasedOn, image.Data, image.ContentType));
     }
 
-    public Task<bool> CompleteRecognitionAsync(string receiptId, int revision, FinanceRecognitionResult result, DateTime updatedAt)
+    public async Task<bool> CompleteRecognitionAsync(FinancePendingRecognition pending, FinanceRecognitionBatch batch, DateTime updatedAt)
     {
         if (FailNextComplete)
         {
@@ -123,10 +125,11 @@ internal sealed class FakeFinanceRepository : IFinanceRepository
             throw new InvalidOperationException("database is down");
         }
 
-        if (!Receipts.TryGetValue(receiptId, out var receipt) || receipt.Revision != revision
-            || receipt.Status != FinanceReceiptStatus.PENDING)
-            return Task.FromResult(false);
+        if (!Receipts.TryGetValue(pending.ReceiptId, out var receipt) || receipt.Revision != pending.Revision
+            || receipt.UserId != pending.UserId || receipt.Status != FinanceReceiptStatus.PENDING)
+            return false;
 
+        var result = batch.Receipts[0];
         receipt.PurchasedOn = result.PurchasedOn;
         receipt.Store = result.Store;
         receipt.Total = result.Total;
@@ -134,11 +137,20 @@ internal sealed class FakeFinanceRepository : IFinanceRepository
         receipt.Category = result.Category;
         receipt.Status = FinanceReceiptStatus.READY;
         receipt.FailureReason = null;
-        receipt.RecognitionJson = result.RawJson;
-        receipt.RecognitionModel = result.Model;
+        if (batch.IsBankScreenshot)
+            receipt.Source = FinanceReceiptSource.BANK_SCREENSHOT;
+        receipt.RecognitionJson = batch.RawJson;
+        receipt.RecognitionModel = batch.Model;
         receipt.UpdatedAt = updatedAt;
         receipt.Items = result.Items.Select(CloneItem).ToList();
-        return Task.FromResult(true);
+        foreach (var item in receipt.Items)
+            item.ReceiptId = pending.ReceiptId;
+        foreach (var purchase in batch.Receipts.Skip(1))
+        {
+            var additional = batch.CreateAdditionalReceipt(pending, purchase, await NextRevisionAsync(), updatedAt);
+            Receipts.Add(additional.Id, additional);
+        }
+        return true;
     }
 
     public Task<bool> FailRecognitionAsync(string receiptId, int revision, FinanceFailureReason reason, string? rawJson, string? model,

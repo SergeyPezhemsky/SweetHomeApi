@@ -23,3 +23,7 @@
 
 ## 5. Review
 - [x] Independent review rounds (gauntlet loop, 5 rounds; round 4 backend clean, round 5 one low client defect fixed and verified).
+
+## 6. Bank purchase screenshots
+- [x] Recognize each purchase separately and save all expenses atomically.
+- [x] Resolve dates without a year and cover date parsing and multi-purchase imports with regression tests.

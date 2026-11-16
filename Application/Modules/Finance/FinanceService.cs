@@ -195,6 +195,8 @@ public class FinanceService(
         var existing = await repository.GetReceiptAsync(userId, receiptId);
         if (existing is null)
             return FinanceOperationResult<FinanceReceipt>.Fail(FinanceOperationStatus.NotFound);
+        if (existing.Source == FinanceReceiptSource.BANK_SCREENSHOT)
+            return FinanceOperationResult<FinanceReceipt>.Fail(FinanceOperationStatus.AlreadyImported);
         if (!existing.HasImage)
             return FinanceOperationResult<FinanceReceipt>.Fail(FinanceOperationStatus.NoImage);
         if (!RecognitionEnabled)
@@ -274,34 +276,35 @@ public class FinanceService(
             : await SaveRecognitionAsync(pending, result);
     }
 
-    public Task<bool> SaveRecognitionAsync(FinancePendingRecognition pending, FinanceRecognitionResult result)
-    {
-        foreach (var item in result.Items)
-            item.ReceiptId = pending.ReceiptId;
+    public Task<bool> SaveRecognitionAsync(FinancePendingRecognition pending, FinanceRecognitionBatch result) =>
+        repository.CompleteRecognitionAsync(pending, result, UtcNow);
 
-        return repository.CompleteRecognitionAsync(pending.ReceiptId, pending.Revision, result, UtcNow);
-    }
-
-    public async Task<(FinanceRecognitionResult? Result, FinanceFailureReason? Failure)> EvaluateRecognitionAsync(
+    public async Task<(FinanceRecognitionBatch? Result, FinanceFailureReason? Failure)> EvaluateRecognitionAsync(
         FinancePendingRecognition pending, string modelResponse, string? model = null)
     {
-        var parsed = ReceiptRecognitionParser.Parse(modelResponse);
-        var keys = parsed?.Items
+        var parsed = ReceiptRecognitionParser.ParseDocument(modelResponse);
+        if (parsed is null)
+            return (null, FinanceFailureReason.UNREADABLE);
+
+        var keys = parsed.Receipts.SelectMany(receipt => receipt.Items)
             .Select(x => FinanceItemKey.Of(x.Name))
             .OfType<string>()
             .Distinct()
-            .ToList() ?? [];
+            .ToList();
         var rules = keys.Count > 0 ? await repository.GetRulesAsync(pending.UserId, keys) : [];
 
-        var (result, failure) = BuildRecognitionResult(parsed, pending.UploadedOn, rules,
-            currentDate: pending.PurchasedOn, latestDate: DateOnly.FromDateTime(UtcNow).AddDays(1));
-        if (result is not null)
+        var results = new List<FinanceRecognitionResult>(parsed.Receipts.Count);
+        var latestDate = DateOnly.FromDateTime(UtcNow).AddDays(1);
+        foreach (var receipt in parsed.Receipts)
         {
-            result.RawJson = Truncate(modelResponse);
-            result.Model = TruncateModel(model);
+            var (result, failure) = BuildRecognitionResult(receipt, pending.UploadedOn, rules,
+                currentDate: parsed.IsBankScreenshot ? null : pending.PurchasedOn, latestDate: latestDate);
+            if (result is null)
+                return (null, failure);
+            results.Add(result);
         }
 
-        return (result, failure);
+        return (new FinanceRecognitionBatch(results, parsed.IsBankScreenshot, Truncate(modelResponse), TruncateModel(model)), null);
     }
 
     public Task<bool> FailRecognitionAsync(FinancePendingRecognition pending, FinanceFailureReason reason, string? rawResponse = null,
@@ -362,9 +365,29 @@ public class FinanceService(
         var latest = fallbackDate.AddDays(1);
         if (latestDate is { } limit && limit < latest)
             latest = limit;
-        var date = parsed.Date is { } recognized
+        var earliest = fallbackDate.AddYears(-3);
+        var candidate = parsed.Date;
+        if (candidate is null && parsed.RelativeDays is { } days)
+            candidate = fallbackDate.AddDays(days);
+        if (candidate is null && parsed.DateWithoutYear is { } parts)
+        {
+            // Берём последнее подходящее число: в январе 31.12 — прошлогодняя покупка.
+            for (var year = latest.Year; year >= earliest.Year; year--)
+            {
+                if (parts.Day > DateTime.DaysInMonth(year, parts.Month))
+                    continue;
+                var dateInYear = new DateOnly(year, parts.Month, parts.Day);
+                if (dateInYear <= latest)
+                {
+                    candidate = dateInYear;
+                    break;
+                }
+            }
+        }
+
+        var date = candidate is { } recognized
                    && recognized <= latest
-                   && recognized >= fallbackDate.AddYears(-3)
+                   && recognized >= earliest
             ? recognized
             : currentDate ?? fallbackDate;
 
