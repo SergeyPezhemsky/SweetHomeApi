@@ -1,3 +1,4 @@
+using Application.Modules.Books;
 using Application.Modules.Finance;
 using Application.Modules.Health;
 using Application.Modules.Movies;
@@ -17,6 +18,19 @@ public class SweetHomeDbContext(DbContextOptions<SweetHomeDbContext> options)
     protected override void OnModelCreating(ModelBuilder builder)
     {
         base.OnModelCreating(builder);
+
+        builder.Entity<Book>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Title).HasMaxLength(300).IsRequired();
+            entity.Property(e => e.Author).HasMaxLength(200).IsRequired();
+            entity.Property(e => e.Genre).HasMaxLength(100);
+            entity.Property(e => e.Notes).HasMaxLength(5000);
+            entity.Property(e => e.Status).HasConversion<string>();
+            entity.HasIndex(e => new { e.UserId, e.Status });
+            entity.HasIndex(e => new { e.UserId, e.UpdatedAt });
+            entity.HasOne(e => e.User).WithMany().HasForeignKey(e => e.UserId).OnDelete(DeleteBehavior.Cascade);
+        });
 
         builder.Entity<MainWidget>(entity =>
         {
@@ -297,6 +311,7 @@ public class SweetHomeDbContext(DbContextOptions<SweetHomeDbContext> options)
     }
 
     public DbSet<MainWidget> MainWidgets { get; set; }
+    public DbSet<Book> Books { get; set; }
     public DbSet<HealthEntry> HealthEntries { get; set; }
     public DbSet<Movie> Movies { get; set; }
     public DbSet<MovieShareSetting> MovieShareSettings { get; set; }
