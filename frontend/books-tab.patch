@@ -1,0 +1,772 @@
+From bc1479f2e843efae30cb5807649af962d0e0c643 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?=D0=97=D0=BB=D0=BE=20=D0=A1=D0=B5=D1=80=D0=B5=D0=B3=D0=B0?=
+ <sergey.pezhemsky@gmail.com>
+Date: Tue, 17 Nov 2026 21:35:32 +0300
+Subject: [PATCH] =?UTF-8?q?=D0=94=D0=BE=D0=B1=D0=B0=D0=B2=D0=B8=D1=82?=
+ =?UTF-8?q?=D1=8C=20=D0=B2=D0=BA=D0=BB=D0=B0=D0=B4=D0=BA=D1=83=20=D0=9A?=
+ =?UTF-8?q?=D0=BD=D0=B8=D0=B3=D0=B8=20=D1=81=20=D0=B1=D0=B8=D0=B1=D0=BB?=
+ =?UTF-8?q?=D0=B8=D0=BE=D1=82=D0=B5=D0=BA=D0=BE=D0=B9=20=D0=B8=20=D0=BF?=
+ =?UTF-8?q?=D1=80=D0=BE=D0=B3=D1=80=D0=B5=D1=81=D1=81=D0=BE=D0=BC=20=D1=87?=
+ =?UTF-8?q?=D1=82=D0=B5=D0=BD=D0=B8=D1=8F?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+---
+ src/app/app-routing.module.ts                 |   7 +
+ src/app/components/header/header.component.ts |   2 +-
+ .../main-menu/main-menu.component.ts          |   5 +
+ .../modules/books-module/books.component.html |  52 ++++++++
+ .../modules/books-module/books.component.scss |  86 ++++++++++++
+ .../books-module/books.component.spec.ts      | 107 +++++++++++++++
+ .../modules/books-module/books.component.ts   | 126 ++++++++++++++++++
+ .../components/book-editor.component.html     |  41 ++++++
+ .../components/book-editor.component.scss     |  30 +++++
+ .../components/book-editor.component.ts       | 101 ++++++++++++++
+ .../modules/books-module/models/book.model.ts |  46 +++++++
+ .../services/books-api.service.ts             |  29 ++++
+ src/test.ts                                   |   1 +
+ 13 files changed, 632 insertions(+), 1 deletion(-)
+ create mode 100644 src/app/modules/books-module/books.component.html
+ create mode 100644 src/app/modules/books-module/books.component.scss
+ create mode 100644 src/app/modules/books-module/books.component.spec.ts
+ create mode 100644 src/app/modules/books-module/books.component.ts
+ create mode 100644 src/app/modules/books-module/components/book-editor.component.html
+ create mode 100644 src/app/modules/books-module/components/book-editor.component.scss
+ create mode 100644 src/app/modules/books-module/components/book-editor.component.ts
+ create mode 100644 src/app/modules/books-module/models/book.model.ts
+ create mode 100644 src/app/modules/books-module/services/books-api.service.ts
+
+diff --git a/src/app/app-routing.module.ts b/src/app/app-routing.module.ts
+index e4ac94d..d1e8c2f 100644
+--- a/src/app/app-routing.module.ts
++++ b/src/app/app-routing.module.ts
+@@ -3,8 +3,15 @@ import { RouterModule, Routes } from '@angular/router';
+ import { MainMenuComponent } from "./components/main-menu/main-menu.component";
+ import { LoginComponent } from "./modules/auth/login/login.component";
+ import { RegisterComponent } from "./modules/auth/register/register.component";
++import type { BooksComponent } from './modules/books-module/books.component';
+ 
+ const routes: Routes = [
++  {
++    path: 'books',
++    loadComponent: () => import('./modules/books-module/books.component').then(m => m.BooksComponent),
++    data: { title: 'Книги' },
++    canDeactivate: [(component: BooksComponent) => component.canDeactivate()],
++  },
+   {
+     path: 'main',
+     component: MainMenuComponent,
+diff --git a/src/app/components/header/header.component.ts b/src/app/components/header/header.component.ts
+index 4849f1a..7b18c5d 100644
+--- a/src/app/components/header/header.component.ts
++++ b/src/app/components/header/header.component.ts
+@@ -218,7 +218,7 @@ export class HeaderComponent extends BaseComponent implements OnInit {
+   goBack(): void {
+     const url = this.router.url.split('?')[0];
+ 
+-    if (url === '/home' || url === '/wardrobe' || url === '/finance') {
++    if (url === '/home' || url === '/wardrobe' || url === '/finance' || url === '/books') {
+       this.router.navigate(['/main']);
+       return;
+     }
+diff --git a/src/app/components/main-menu/main-menu.component.ts b/src/app/components/main-menu/main-menu.component.ts
+index c6c3a72..1b3cd20 100644
+--- a/src/app/components/main-menu/main-menu.component.ts
++++ b/src/app/components/main-menu/main-menu.component.ts
+@@ -197,6 +197,11 @@ export class MainMenuComponent extends BaseComponent implements OnInit {
+       return;
+     }
+ 
++    if (widget.alias === 'books') {
++      this.router.navigate(['/books']);
++      return;
++    }
++
+     if (widget.alias === 'health') {
+       this.router.navigate(['/health-module']);
+       return;
+diff --git a/src/app/modules/books-module/books.component.html b/src/app/modules/books-module/books.component.html
+new file mode 100644
+index 0000000..c6e8f1d
+--- /dev/null
++++ b/src/app/modules/books-module/books.component.html
+@@ -0,0 +1,52 @@
++<section class="library" aria-label="Личная библиотека">
++  <div class="library-heading">
++    <div><p class="eyebrow"><mat-icon aria-hidden="true">local_library</mat-icon> МЕСТО ДЛЯ ХОРОШИХ ИСТОРИЙ</p><h2>Моя библиотека</h2><p class="subtitle">Читайте в своём ритме. Сохраняйте то, что откликается.</p></div>
++    <button class="primary add-book" type="button" (click)="edit()"><mat-icon aria-hidden="true">add</mat-icon>Добавить книгу</button>
++  </div>
++
++  <div class="stats" *ngIf="loaded" aria-label="Статистика всей библиотеки">
++    <div class="stat"><mat-icon aria-hidden="true">library_books</mat-icon><span class="stat-value">{{ stats.total }}</span><span>Всего книг</span></div>
++    <div class="stat"><mat-icon aria-hidden="true">auto_stories</mat-icon><span class="stat-value">{{ stats.reading }}</span><span>Сейчас читаю</span></div>
++    <div class="stat"><mat-icon aria-hidden="true">task_alt</mat-icon><span class="stat-value">{{ stats.completed }}</span><span>Прочитано</span></div>
++    <div class="stat"><mat-icon aria-hidden="true">menu_book</mat-icon><span class="stat-value">{{ stats.pagesRead.toLocaleString('ru-RU') }}</span><span>Страниц прочитано</span></div>
++  </div>
++
++  <div class="toolbar">
++    <label class="search"><mat-icon aria-hidden="true">search</mat-icon><input type="search" aria-label="Поиск по названию и автору" placeholder="Название книги или автор" [ngModel]="query" (ngModelChange)="search($event)" /></label>
++    <label class="sort"><span>Сначала</span><select aria-label="Сортировка книг" [(ngModel)]="sortBy" (ngModelChange)="filter()"><option value="UPDATED_AT">Недавно обновлённые</option><option value="TITLE">По названию</option><option value="AUTHOR">По автору</option><option value="RATING">С высокой оценкой</option></select></label>
++  </div>
++
++  <div class="shelves" role="group" aria-label="Фильтр по статусу чтения">
++    <button type="button" [class.active]="!status" [attr.aria-pressed]="!status" (click)="selectStatus('')">Все книги <span *ngIf="loaded">{{ stats.total }}</span></button>
++    <button type="button" *ngFor="let shelf of statuses" [class.active]="status === shelf.code" [attr.aria-pressed]="status === shelf.code" (click)="selectStatus(shelf.code)"><mat-icon aria-hidden="true">{{ shelf.icon }}</mat-icon>{{ shelf.name }}<span *ngIf="loaded">{{ statusCount(shelf.code) }}</span></button>
++  </div>
++
++  <div class="notice" role="alert" *ngIf="error"><mat-icon aria-hidden="true">wifi_off</mat-icon><p>{{ error }}</p><button class="secondary" type="button" (click)="reload()">Повторить</button></div>
++
++  <div class="book-grid" *ngIf="loading" aria-label="Загрузка книг" aria-busy="true"><div class="skeleton" *ngFor="let item of [1,2,3,4,5,6]"><div></div><span></span><span></span></div></div>
++
++  <ng-container *ngIf="!loading && !error">
++    <div class="empty" *ngIf="!books.length">
++      <div class="empty-icon"><mat-icon aria-hidden="true">{{ query || status ? 'search_off' : 'auto_stories' }}</mat-icon></div>
++      <h3>{{ query || status ? 'Здесь пока нет книг' : 'У каждой истории есть первая страница' }}</h3>
++      <p>{{ query || status ? 'Попробуйте другой запрос или выберите другую полку.' : 'Добавьте книгу, которую читаете сейчас, или сохраните ту, до которой давно хочется добраться.' }}</p>
++      <button type="button" class="primary" *ngIf="!query && !status" (click)="edit()"><mat-icon aria-hidden="true">add</mat-icon>Добавить первую книгу</button>
++      <button type="button" class="secondary" *ngIf="query || status" (click)="reset()">Сбросить фильтры</button>
++    </div>
++
++    <p class="result-count" *ngIf="books.length" aria-live="polite">Найдено: {{ total }} · Страница {{ page }}</p>
++    <div class="book-grid" *ngIf="books.length">
++      <article class="book-card" *ngFor="let book of books; trackBy: trackBook">
++        <div class="book-top"><span class="status" [class.reading]="book.status === 'READING'" [class.completed]="book.status === 'COMPLETED'">{{ statusName(book.status) }}</span><span class="rating" *ngIf="book.rating !== null" [attr.aria-label]="'Оценка ' + book.rating + ' из 5'"><mat-icon aria-hidden="true">star</mat-icon>{{ book.rating }}<small>/ 5</small></span></div>
++        <div class="book-identity"><div class="book-spine" aria-hidden="true"><mat-icon>menu_book</mat-icon></div><div><h3>{{ book.title }}</h3><p class="author">{{ book.author }}</p><span class="genre" *ngIf="book.genre">{{ book.genre }}</span></div></div>
++        <div class="reading-progress"><div><span>{{ book.pagesRead }}<ng-container *ngIf="book.totalPages !== null"> из {{ book.totalPages }}</ng-container> стр.</span><strong *ngIf="book.totalPages !== null">{{ progress(book) }}%</strong></div><progress *ngIf="book.totalPages !== null" [value]="book.pagesRead" [max]="book.totalPages" [attr.aria-label]="'Прогресс чтения книги ' + book.title"></progress><div class="unknown-progress" *ngIf="book.totalPages === null">Объём книги пока не указан</div></div>
++        <p class="book-notes" *ngIf="book.notes">{{ book.notes }}</p>
++        <div class="card-actions" *ngIf="confirmingId !== book.id"><button class="edit-button" type="button" (click)="edit(book)" [attr.aria-label]="'Редактировать книгу ' + book.title"><mat-icon aria-hidden="true">edit_note</mat-icon>Редактировать</button><button class="delete-button" type="button" (click)="confirmingId = book.id" [disabled]="!!deletingId" [attr.aria-label]="'Удалить книгу ' + book.title"><mat-icon aria-hidden="true">delete_outline</mat-icon></button></div>
++        <div class="delete-confirm" *ngIf="confirmingId === book.id" role="group" [attr.aria-label]="'Удалить книгу ' + book.title + '?'">
++          <span>Удалить книгу?</span><button class="secondary" type="button" [disabled]="!!deletingId" (click)="confirmingId = null">Нет</button><button class="danger" type="button" [disabled]="!!deletingId" (click)="remove(book)">{{ deletingId === book.id ? 'Удаление…' : 'Удалить' }}</button>
++        </div>
++      </article>
++    </div>
++    <nav class="pagination" *ngIf="page > 1 || hasNext" aria-label="Страницы библиотеки"><button class="secondary" type="button" [disabled]="page <= 1" (click)="changePage(-1)"><mat-icon aria-hidden="true">chevron_left</mat-icon>Назад</button><span>{{ page }}</span><button class="secondary" type="button" [disabled]="!hasNext" (click)="changePage(1)">Далее<mat-icon aria-hidden="true">chevron_right</mat-icon></button></nav>
++  </ng-container>
++</section>
+diff --git a/src/app/modules/books-module/books.component.scss b/src/app/modules/books-module/books.component.scss
+new file mode 100644
+index 0000000..f2547f6
+--- /dev/null
++++ b/src/app/modules/books-module/books.component.scss
+@@ -0,0 +1,86 @@
++@import '../../styles/shared-styles';
++
++:host { display: block; color: $color-text-main; }
++.library { max-width: 1160px; margin: 0 auto; padding: 32px 28px 64px; }
++.library-heading { display: flex; justify-content: space-between; align-items: center; gap: 24px; margin-bottom: 26px; }
++.eyebrow { display: flex; align-items: center; gap: 7px; margin: 0 0 9px; color: $color-accent-soft; font-size: 10px; font-weight: 800; letter-spacing: .12em; }
++.eyebrow mat-icon { font-size: 16px; width: 16px; height: 16px; }
++h2 { margin: 0; font-size: clamp(26px, 3vw, 36px); font-weight: 800; letter-spacing: -.04em; }
++.subtitle { font-size: 13px; color: $alpha-sand-72; margin: 10px 0 0; }
++button, input, select { font-family: inherit; }
++button { display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 44px; border: 1px solid $alpha-white-15; border-radius: 11px; padding: 10px 15px; cursor: pointer; font-size: 12px; font-weight: 700; transition: background .15s, border-color .15s; }
++.primary { background: $color-accent-soft; border-color: transparent; color: $color-bg-deep-1; }
++.primary:hover { background: $color-accent-cream; }
++.add-book { flex-shrink: 0; }
++.secondary { background: $alpha-white-04; color: $color-text-main; }
++.stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 28px; }
++.stat { display: grid; grid-template-columns: 1fr auto; gap: 9px; padding: 18px 20px; background: $alpha-white-03; border: 1px solid $alpha-white-08; border-radius: 14px; }
++.stat mat-icon { grid-column: 2; grid-row: 1 / 3; align-self: center; color: $color-accent-soft; opacity: .85; }
++.stat-value { font-size: 28px; line-height: 1; font-weight: 800; font-variant-numeric: tabular-nums; }
++.stat > span:last-child { font-size: 11px; color: $alpha-sand-72; }
++.toolbar { display: flex; gap: 12px; margin-bottom: 16px; }
++.search { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; padding: 0 13px; border: 1px solid $alpha-white-15; border-radius: 11px; background: $alpha-white-03; color: $alpha-sand-72; }
++.search input { background: transparent; border: 0; color: $color-text-main; width: 100%; min-width: 0; min-height: 46px; font-size: 13px; }
++.search input::placeholder { color: $alpha-sand-70; }
++.search:focus-within { border-color: $color-accent-soft; }
++.search input:focus { outline: none; }
++.sort { display: flex; align-items: center; gap: 10px; font-size: 11px; color: $alpha-sand-72; }
++.sort select { min-height: 46px; padding: 0 12px; border-radius: 11px; border: 1px solid $alpha-white-15; background: $color-bg-deep-1; color: $color-text-main; font-size: 12px; }
++.shelves { display: flex; gap: 8px; flex-wrap: wrap; padding-bottom: 22px; border-bottom: 1px solid $alpha-white-08; }
++.shelves button { background: transparent; color: $alpha-sand-74; border-color: $alpha-white-08; min-height: 38px; padding: 7px 12px; font-size: 11px; }
++.shelves button mat-icon { font-size: 16px; height: 16px; width: 16px; }
++.shelves button span { font-size: 10px; padding: 1px 5px; background: $alpha-white-06; border-radius: 4px; }
++.shelves .active { background: $alpha-accent-16-alt; border-color: $alpha-accent-48; color: $color-accent-cream; }
++.result-count { color: $alpha-sand-72; font-size: 11px; margin: 20px 0 14px; }
++.book-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
++.book-card { display: flex; flex-direction: column; padding: 20px; background: linear-gradient(145deg, $alpha-white-06, $alpha-white-02); border: 1px solid $alpha-white-08; border-radius: 16px; min-width: 0; }
++.book-card:hover { border-color: $alpha-white-20; }
++.book-top { display: flex; justify-content: space-between; align-items: center; gap: 8px; min-height: 22px; }
++.status { font-size: 10px; border: 1px solid $alpha-white-15; border-radius: 6px; padding: 4px 7px; color: $alpha-sand-74; }
++.status.reading { color: $color-accent-cream; border-color: $alpha-accent-30; background: $alpha-accent-10; }
++.status.completed { color: #a7d9be; border-color: rgba(167,217,190,.25); background: rgba(167,217,190,.07); }
++.rating { display: flex; gap: 3px; align-items: center; font-size: 12px; font-weight: 700; }
++.rating mat-icon { color: $color-accent-soft; font-size: 15px; width: 15px; height: 15px; }
++.rating small { font-size: 10px; color: $alpha-sand-70; font-weight: 400; }
++.book-identity { display: flex; gap: 13px; margin: 22px 0; flex: 1; align-items: flex-start; }
++.book-identity > div:last-child { min-width: 0; }
++.book-spine { display: grid; place-items: center; width: 46px; height: 62px; flex-shrink: 0; color: $color-accent-cream; border-radius: 3px 8px 8px 3px; background: linear-gradient(90deg, $alpha-accent-30 5px, $alpha-accent-10 5px); border: 1px solid $alpha-accent-30; box-shadow: inset -3px 0 0 $alpha-white-04; }
++.book-identity h3 { font-size: 16px; line-height: 1.45; margin: 0 0 5px; overflow-wrap: anywhere; }
++.author { margin: 0; color: $alpha-sand-74; font-size: 12px; overflow-wrap: anywhere; }
++.genre { display: inline-block; font-size: 10px; color: $alpha-sand-72; margin-top: 9px; overflow-wrap: anywhere; }
++.reading-progress > div:first-child { display: flex; justify-content: space-between; align-items: center; font-size: 11px; color: $alpha-sand-72; }
++.reading-progress strong { font-size: 11px; font-weight: 600; color: $color-accent-cream; }
++progress { appearance: none; display: block; width: 100%; height: 5px; margin-top: 9px; border: 0; border-radius: 5px; overflow: hidden; background: $alpha-white-08; accent-color: $color-accent-soft; }
++progress::-webkit-progress-bar { background: $alpha-white-08; }
++progress::-webkit-progress-value { background: $color-accent-soft; border-radius: 5px; }
++progress::-moz-progress-bar { background: $color-accent-soft; }
++.unknown-progress { font-size: 10px; color: $alpha-sand-70; margin-top: 7px; }
++.book-notes { color: $alpha-sand-74; margin: 16px 0 0; font-size: 12px; line-height: 1.65; white-space: pre-wrap; overflow-wrap: anywhere; max-height: 100px; overflow: auto; }
++.card-actions { display: flex; justify-content: space-between; border-top: 1px solid $alpha-white-08; padding-top: 10px; margin-top: 18px; }
++.card-actions button { min-height: 36px; padding: 4px 8px; background: transparent; border-color: transparent; color: $alpha-sand-74; font-size: 11px; }
++.card-actions button:hover { color: $color-accent-cream; background: $alpha-white-04; }
++.card-actions .edit-button { margin-left: -8px; }
++.card-actions mat-icon { font-size: 20px; }
++.delete-confirm { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; border-top: 1px solid $alpha-white-08; padding-top: 10px; margin-top: 18px; font-size: 11px; }
++.delete-confirm > span { margin-right: auto; }
++.delete-confirm button { min-height: 36px; padding: 6px 10px; font-size: 11px; }
++.danger { background: $alpha-accent-16-alt; color: $color-accent-peach; border-color: $alpha-accent-30; }
++.pagination { display: flex; justify-content: center; align-items: center; gap: 22px; margin-top: 28px; font-size: 12px; }
++.empty { display: grid; justify-items: center; text-align: center; padding: 60px 20px; }
++.empty-icon { width: 76px; height: 76px; display: grid; place-items: center; border: 1px solid $alpha-accent-30; border-radius: 24px; background: $alpha-accent-10; color: $color-accent-soft; margin-bottom: 22px; transform: rotate(-6deg); }
++.empty-icon mat-icon { width: 36px; height: 36px; font-size: 36px; }
++.empty h3 { font-size: 20px; margin: 0; }
++.empty p { max-width: 390px; color: $alpha-sand-72; font-size: 13px; line-height: 1.8; margin: 12px 0 24px; }
++.notice { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; padding: 18px; margin: 20px 0; border: 1px solid $alpha-accent-30; border-radius: 12px; background: $alpha-accent-10; }
++.notice p { flex: 1; margin: 0; font-size: 13px; line-height: 1.6; }
++.skeleton { border: 1px solid $alpha-white-08; border-radius: 16px; height: 230px; padding: 20px; margin-top: 20px; animation: breathe 1.4s ease-in-out infinite alternate; }
++.skeleton > div, .skeleton > span { display: block; background: $alpha-white-06; border-radius: 5px; }
++.skeleton > div { width: 45%; height: 20px; margin-bottom: 35px; }
++.skeleton > span { width: 85%; height: 16px; margin-top: 12px; }
++.skeleton > span:last-child { width: 55%; }
++button:disabled { opacity: .4; cursor: default; }
++:focus-visible { outline: 2px solid $color-accent-soft; outline-offset: 3px; }
++@keyframes breathe { to { opacity: .4; } }
++@media (prefers-reduced-motion: reduce) { .skeleton { animation: none; } * { transition: none; } }
++@media (max-width: 1000px) { .book-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .stats { gap: 8px; } .stat { padding: 16px 12px; } .stat mat-icon { display: none; } .stat-value { grid-column: 1 / 3; } }
++@media (max-width: 600px) { .library { padding: 24px 16px 40px; } .library-heading { align-items: stretch; flex-direction: column; gap: 18px; margin-bottom: 20px; } .add-book { align-self: flex-start; } .subtitle { font-size: 12px; line-height: 1.7; } .stats { grid-template-columns: 1fr 1fr; margin-bottom: 20px; } .stat mat-icon { display: block; } .stat-value { grid-column: 1; font-size: 25px; } .toolbar { flex-direction: column; } .sort { justify-content: space-between; } .sort select { flex: 1; } .shelves { gap: 7px; } .shelves button { font-size: 10px; padding: 6px 9px; } .book-grid { grid-template-columns: minmax(0, 1fr); } .empty { padding: 44px 0; } .empty h3 { font-size: 18px; } }
+diff --git a/src/app/modules/books-module/books.component.spec.ts b/src/app/modules/books-module/books.component.spec.ts
+new file mode 100644
+index 0000000..ad15e1e
+--- /dev/null
++++ b/src/app/modules/books-module/books.component.spec.ts
+@@ -0,0 +1,107 @@
++import { HttpErrorResponse } from '@angular/common/http';
++import { ComponentFixture, TestBed, fakeAsync, tick } from '@angular/core/testing';
++import { MatDialog, MatDialogRef, MAT_DIALOG_DATA } from '@angular/material/dialog';
++import { NoopAnimationsModule } from '@angular/platform-browser/animations';
++import { EMPTY, Subject, of, throwError } from 'rxjs';
++import { BooksComponent } from './books.component';
++import { BookEditorComponent } from './components/book-editor.component';
++import { BookList } from './models/book.model';
++import { BooksApiService } from './services/books-api.service';
++
++const emptyList: BookList = {
++  items: [], page: 1, pageSize: 24, total: 0, hasNext: false,
++  stats: { total: 0, reading: 0, completed: 0, wantToRead: 0, onHold: 0, dropped: 0, pagesRead: 12345 },
++};
++
++describe('Books library', () => {
++  let api: jasmine.SpyObj<BooksApiService>;
++  let fixture: ComponentFixture<BooksComponent>;
++
++  beforeEach(async () => {
++    api = jasmine.createSpyObj<BooksApiService>('BooksApiService', ['list', 'save', 'delete']);
++    api.list.and.returnValue(of(emptyList));
++    await TestBed.configureTestingModule({
++      imports: [BooksComponent, NoopAnimationsModule],
++      providers: [{ provide: BooksApiService, useValue: api }],
++    }).compileComponents();
++    fixture = TestBed.createComponent(BooksComponent);
++    fixture.detectChanges();
++  });
++
++  it('renders Russian page counts without requiring Angular locale registration', () => {
++    expect(fixture.nativeElement.textContent).toContain('12 345');
++  });
++
++  it('repeats a previous search after filters are reset', fakeAsync(() => {
++    const component = fixture.componentInstance;
++    component.search('Дюна'); tick(301);
++    component.reset();
++    component.search('Дюна'); tick(301);
++    expect(api.list.calls.mostRecent().args).toEqual(['Дюна', '', 'UPDATED_AT', 1]);
++    expect(api.list.calls.count()).toBe(4);
++  }));
++
++  it('ignores a stale response when the user changes the shelf', () => {
++    const oldResponse = new Subject<BookList>();
++    const currentResponse = new Subject<BookList>();
++    api.list.and.returnValues(oldResponse, currentResponse);
++    const component = fixture.componentInstance;
++    component.reload();
++    component.selectStatus('READING');
++    currentResponse.next({ ...emptyList, total: 2 });
++    oldResponse.next({ ...emptyList, total: 99 });
++    expect(component.total).toBe(2);
++  });
++
++  it('recovers from a failed request on retry', () => {
++    api.list.and.returnValue(throwError(() => new HttpErrorResponse({ status: 500 })));
++    const component = fixture.componentInstance;
++    component.reload();
++    expect(component.error).toBeTruthy();
++    api.list.and.returnValue(of(emptyList));
++    component.reload();
++    expect(component.error).toBe('');
++    expect(component.loading).toBeFalse();
++  });
++});
++
++describe('Book editor', () => {
++  let fixture: ComponentFixture<BookEditorComponent>;
++  let dialog: { close: jasmine.Spy; backdropClick: () => typeof EMPTY; keydownEvents: () => typeof EMPTY };
++
++  beforeEach(async () => {
++    dialog = { close: jasmine.createSpy('close'), backdropClick: () => EMPTY, keydownEvents: () => EMPTY };
++    await TestBed.configureTestingModule({
++      imports: [BookEditorComponent, NoopAnimationsModule],
++      providers: [
++        { provide: BooksApiService, useValue: jasmine.createSpyObj('BooksApiService', ['save']) },
++        { provide: MAT_DIALOG_DATA, useValue: null },
++        { provide: MatDialogRef, useValue: dialog },
++      ],
++    }).compileComponents();
++    fixture = TestBed.createComponent(BookEditorComponent);
++    fixture.detectChanges();
++  });
++
++  it('rejects fractional page counts', () => {
++    fixture.componentInstance.book.totalPages = 100.5;
++    expect(fixture.componentInstance.pagesInvalid).toBeTrue();
++  });
++
++  it('ignores stale disabled progress when completing a book with known length', () => {
++    const component = fixture.componentInstance;
++    component.book.totalPages = 200;
++    component.book.pagesRead = Number.NaN;
++    component.book.status = 'COMPLETED';
++    expect(component.pagesInvalid).toBeFalse();
++    expect(component.progressInvalid).toBeFalse();
++  });
++
++  it('preserves a dirty draft when the editor is closed', () => {
++    const component = fixture.componentInstance;
++    component.form?.form.markAsDirty();
++    component.requestClose();
++    expect(component.confirmDiscard).toBeTrue();
++    expect(dialog.close).not.toHaveBeenCalled();
++  });
++});
+diff --git a/src/app/modules/books-module/books.component.ts b/src/app/modules/books-module/books.component.ts
+new file mode 100644
+index 0000000..5e76954
+--- /dev/null
++++ b/src/app/modules/books-module/books.component.ts
+@@ -0,0 +1,126 @@
++import { CommonModule } from '@angular/common';
++import { HttpErrorResponse } from '@angular/common/http';
++import { ChangeDetectionStrategy, ChangeDetectorRef, Component, DestroyRef, OnInit, inject } from '@angular/core';
++import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
++import { FormsModule } from '@angular/forms';
++import { MatDialog, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
++import { MatIconModule } from '@angular/material/icon';
++import { EMPTY, Subject, catchError, debounceTime, finalize, startWith, switchMap } from 'rxjs';
++import { Book, BOOK_STATUSES, BookSort, BookStats, BookStatus } from './models/book.model';
++import { BooksApiService } from './services/books-api.service';
++import { BookEditorComponent } from './components/book-editor.component';
++
++@Component({
++  selector: 'app-books',
++  standalone: true,
++  imports: [CommonModule, FormsModule, MatIconModule, MatDialogModule],
++  templateUrl: './books.component.html',
++  styleUrl: './books.component.scss',
++  changeDetection: ChangeDetectionStrategy.OnPush,
++})
++export class BooksComponent implements OnInit {
++  private readonly destroyRef = inject(DestroyRef);
++  private readonly requests = new Subject<void>();
++  private readonly searches = new Subject<string>();
++  private editorRef: MatDialogRef<BookEditorComponent, Book> | null = null;
++  readonly statuses = BOOK_STATUSES;
++  books: Book[] = [];
++  stats: BookStats = { total: 0, wantToRead: 0, reading: 0, completed: 0, onHold: 0, dropped: 0, pagesRead: 0 };
++  query = '';
++  status: BookStatus | '' = '';
++  sortBy: BookSort = 'UPDATED_AT';
++  page = 1;
++  total = 0;
++  hasNext = false;
++  loading = true;
++  loaded = false;
++  error = '';
++  deletingId: string | null = null;
++  confirmingId: string | null = null;
++
++  constructor(private readonly api: BooksApiService, private readonly dialog: MatDialog, private readonly cdr: ChangeDetectorRef) {}
++
++  ngOnInit(): void {
++    this.searches.pipe(debounceTime(300), takeUntilDestroyed(this.destroyRef)).subscribe(() => this.filter());
++    this.requests.pipe(
++      startWith(undefined),
++      switchMap(() => {
++        this.loading = true;
++        this.error = '';
++        this.confirmingId = null;
++        this.cdr.markForCheck();
++        return this.api.list(this.query, this.status, this.sortBy, this.page).pipe(
++          catchError((error: HttpErrorResponse) => {
++            this.books = [];
++            this.error = error.status === 401 ? 'Войдите в аккаунт, чтобы открыть свою библиотеку.' : 'Не удалось загрузить книги. Проверьте соединение и попробуйте ещё раз.';
++            return EMPTY;
++          }),
++          finalize(() => { this.loading = false; this.cdr.markForCheck(); }),
++        );
++      }),
++      takeUntilDestroyed(this.destroyRef),
++    ).subscribe(result => {
++      if (this.page > 1 && !result.items.length) {
++        this.page--;
++        this.requests.next();
++        return;
++      }
++      this.books = result.items;
++      this.stats = result.stats;
++      this.total = result.total;
++      this.hasNext = result.hasNext;
++      this.loaded = true;
++      this.cdr.markForCheck();
++    });
++  }
++
++  search(value: string): void { this.query = value; this.searches.next(value); }
++  filter(): void { this.page = 1; this.requests.next(); }
++  selectStatus(status: BookStatus | ''): void { this.status = status; this.filter(); }
++  reload(): void { this.requests.next(); }
++  reset(): void { this.query = ''; this.status = ''; this.filter(); }
++  changePage(delta: number): void { this.page += delta; this.requests.next(); }
++  trackBook(_: number, book: Book): string { return book.id; }
++  statusName(status: BookStatus): string { return this.statuses.find(item => item.code === status)?.name ?? status; }
++  progress(book: Book): number { return book.totalPages ? Math.min(100, Math.round(book.pagesRead / book.totalPages * 100)) : 0; }
++  statusCount(status: BookStatus): number {
++    return ({ WANT_TO_READ: this.stats.wantToRead, READING: this.stats.reading, COMPLETED: this.stats.completed, ON_HOLD: this.stats.onHold, DROPPED: this.stats.dropped })[status];
++  }
++
++  edit(book?: Book): void {
++    if (this.editorRef) return;
++    this.editorRef = this.dialog.open(BookEditorComponent, {
++      data: book ?? null, width: '560px', maxWidth: 'calc(100vw - 24px)', autoFocus: 'first-tabbable', disableClose: true, closeOnNavigation: false,
++      ariaLabel: book ? 'Редактировать книгу' : 'Добавить книгу',
++    });
++    this.editorRef.afterClosed().pipe(takeUntilDestroyed(this.destroyRef)).subscribe(result => {
++      this.editorRef = null;
++      if (result) this.reload();
++    });
++  }
++
++  canDeactivate(): boolean {
++    if (!this.editorRef) return true;
++    const editor = this.editorRef.componentInstance;
++    if (editor.saving || editor.form?.dirty) { editor.requestClose(); return false; }
++    this.editorRef.close();
++    return true;
++  }
++
++  remove(book: Book): void {
++    if (this.deletingId) return;
++    this.deletingId = book.id;
++    this.api.delete(book.id).pipe(takeUntilDestroyed(this.destroyRef), finalize(() => {
++      this.deletingId = null;
++      this.cdr.markForCheck();
++    })).subscribe({
++      next: () => this.reload(),
++      error: (error: HttpErrorResponse) => {
++        if (error.status === 404) { this.reload(); return; }
++        this.error = 'Не удалось удалить книгу. Попробуйте ещё раз.';
++        this.confirmingId = null;
++        this.cdr.markForCheck();
++      },
++    });
++  }
++}
+diff --git a/src/app/modules/books-module/components/book-editor.component.html b/src/app/modules/books-module/components/book-editor.component.html
+new file mode 100644
+index 0000000..789ac10
+--- /dev/null
++++ b/src/app/modules/books-module/components/book-editor.component.html
+@@ -0,0 +1,41 @@
++<form #form="ngForm" (ngSubmit)="save(form)" novalidate>
++  <div class="editor-heading">
++    <div><span class="eyebrow">МОЯ БИБЛИОТЕКА</span><h2 mat-dialog-title>{{ editing ? 'Редактировать книгу' : 'Новая книга' }}</h2></div>
++    <button type="button" class="icon-button" [disabled]="saving" (click)="requestClose()" aria-label="Закрыть"><mat-icon>close</mat-icon></button>
++  </div>
++  <mat-dialog-content>
++    <fieldset [disabled]="saving">
++      <label>Название <span aria-hidden="true">*</span>
++        <input name="title" [(ngModel)]="book.title" required maxlength="300" placeholder="Например, Мастер и Маргарита" autocomplete="off" [attr.aria-invalid]="submitted && !book.title.trim()" />
++      </label>
++      <span class="field-error" *ngIf="submitted && !book.title.trim()">Введите название книги.</span>
++      <label>Автор <span aria-hidden="true">*</span>
++        <input name="author" [(ngModel)]="book.author" required maxlength="200" placeholder="Имя автора" autocomplete="off" [attr.aria-invalid]="submitted && !book.author.trim()" />
++      </label>
++      <span class="field-error" *ngIf="submitted && !book.author.trim()">Укажите автора.</span>
++      <div class="form-row">
++        <label>Статус<select name="status" [(ngModel)]="book.status"><option *ngFor="let status of statuses" [ngValue]="status.code">{{ status.name }}</option></select></label>
++        <label>Жанр<input name="genre" [(ngModel)]="book.genre" maxlength="100" placeholder="Например, фантастика" /></label>
++      </div>
++      <div class="form-row">
++        <label>Всего страниц<input name="totalPages" type="number" [(ngModel)]="book.totalPages" min="1" max="100000" step="1" placeholder="Неизвестно" #total="ngModel" /></label>
++        <label>Прочитано страниц<input name="pagesRead" type="number" [(ngModel)]="book.pagesRead" required min="0" max="100000" step="1" #read="ngModel" [disabled]="book.status === 'COMPLETED' && book.totalPages !== null" /></label>
++      </div>
++      <p class="field-hint" *ngIf="book.status === 'COMPLETED' && book.totalPages !== null">Для прочитанной книги прогресс сохранится как {{ book.totalPages }} из {{ book.totalPages }} страниц.</p>
++      <p class="field-error" *ngIf="(submitted || total.dirty || read.dirty) && (total.invalid || read.invalid || pagesInvalid || progressInvalid)">Укажите целое число страниц: всего от 1 до 100 000, прочитано от 0 до общего количества.</p>
++      <label>Моя оценка<select name="rating" [(ngModel)]="book.rating"><option [ngValue]="null">Без оценки</option><option *ngFor="let rating of [5,4,3,2,1]" [ngValue]="rating">{{ rating }} из 5</option></select></label>
++      <label>Заметки<textarea name="notes" [(ngModel)]="book.notes" rows="3" maxlength="5000" placeholder="Впечатления, любимые цитаты или почему хочется прочитать"></textarea></label>
++    </fieldset>
++    <p class="save-error" role="alert" *ngIf="error">{{ error }}</p>
++    <a class="login-link" *ngIf="sessionExpired" href="/login" target="_blank" rel="noopener">Войти в новой вкладке ↗</a>
++    <div #discardNotice class="save-error discard-confirm" role="alert" tabindex="-1" *ngIf="confirmDiscard">
++      <p>Изменения ещё не сохранены. Закрыть форму?</p>
++      <button type="button" class="secondary" (click)="confirmDiscard = false">Продолжить редактирование</button>
++      <button type="button" class="secondary" [disabled]="saving" (click)="dialog.close()">Выйти без сохранения</button>
++    </div>
++  </mat-dialog-content>
++  <mat-dialog-actions align="end">
++    <button type="button" class="secondary" (click)="requestClose()" [disabled]="saving">Отмена</button>
++    <button type="submit" class="primary" [disabled]="saving">{{ saving ? 'Сохранение…' : 'Сохранить книгу' }}</button>
++  </mat-dialog-actions>
++</form>
+diff --git a/src/app/modules/books-module/components/book-editor.component.scss b/src/app/modules/books-module/components/book-editor.component.scss
+new file mode 100644
+index 0000000..350b0ad
+--- /dev/null
++++ b/src/app/modules/books-module/components/book-editor.component.scss
+@@ -0,0 +1,30 @@
++@import '../../../styles/shared-styles';
++
++:host { display: block; color: $color-text-main; background: $color-bg-deep-1; }
++form { padding: 24px 12px 12px; }
++.editor-heading { display: flex; justify-content: space-between; align-items: center; padding: 0 12px 12px; gap: 12px; }
++.eyebrow { font-size: 10px; letter-spacing: .15em; color: $color-accent-soft; font-weight: 800; }
++h2[mat-dialog-title] { padding: 4px 0 0; margin: 0; color: inherit; font: 700 23px 'Manrope', sans-serif; }
++h2[mat-dialog-title]::before { display: none; }
++mat-dialog-content { max-height: 66vh; color: inherit !important; padding: 12px !important; }
++fieldset { border: 0; margin: 0; padding: 0; display: grid; gap: 16px; min-width: 0; }
++label { display: flex; flex-wrap: wrap; gap: 7px; font-size: 12px; font-weight: 600; min-width: 0; }
++label span { color: $color-accent-soft; }
++input, select, textarea { box-sizing: border-box; width: 100%; border: 1px solid $alpha-white-15; border-radius: 10px; padding: 11px 12px; background: $alpha-black-20; color: inherit; font: 13px 'Manrope', sans-serif; }
++input::placeholder, textarea::placeholder { color: $alpha-sand-70; font-size: 12px; }
++select option { background: $color-bg-deep-1; color: $color-text-main; }
++textarea { resize: vertical; }
++.form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
++button { min-height: 42px; padding: 10px 16px; border-radius: 10px; border: 1px solid $alpha-white-15; cursor: pointer; font: 700 13px 'Manrope', sans-serif; }
++.primary { background: $color-accent-soft; color: $color-bg-deep-1; border-color: transparent; }
++.secondary, .icon-button { background: transparent; color: $color-text-main; }
++.icon-button { padding: 8px; line-height: 0; }
++.field-hint { margin: -6px 0 0; color: $alpha-sand-72; font-size: 12px; }
++.field-error, .save-error { color: $color-accent-peach; font-size: 12px; margin: -6px 0 0; }
++.save-error { padding: 12px; border: 1px solid $alpha-accent-30; border-radius: 10px; margin: 12px 0 0; }
++.discard-confirm { display: flex; flex-wrap: wrap; gap: 8px; }
++.discard-confirm p { width: 100%; margin: 0 0 4px; }
++.login-link { display: inline-block; color: $color-accent-cream; margin: 12px 0 0; font-size: 13px; }
++:focus-visible { outline: 2px solid $color-accent-soft; outline-offset: 3px; }
++button:disabled { opacity: .5; cursor: wait; }
++@media (max-width: 420px) { .form-row { grid-template-columns: 1fr; } h2[mat-dialog-title] { font-size: 20px; } }
+diff --git a/src/app/modules/books-module/components/book-editor.component.ts b/src/app/modules/books-module/components/book-editor.component.ts
+new file mode 100644
+index 0000000..dd2cfc9
+--- /dev/null
++++ b/src/app/modules/books-module/components/book-editor.component.ts
+@@ -0,0 +1,101 @@
++import { CommonModule } from '@angular/common';
++import { HttpErrorResponse } from '@angular/common/http';
++import { Component, DestroyRef, ElementRef, HostListener, Inject, ViewChild, inject } from '@angular/core';
++import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
++import { FormsModule, NgForm } from '@angular/forms';
++import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
++import { MatIconModule } from '@angular/material/icon';
++import { finalize } from 'rxjs';
++import { Book, BOOK_STATUSES, BookUpsert } from '../models/book.model';
++import { BooksApiService } from '../services/books-api.service';
++
++@Component({
++  selector: 'app-book-editor',
++  standalone: true,
++  imports: [CommonModule, FormsModule, MatDialogModule, MatIconModule],
++  templateUrl: './book-editor.component.html',
++  styleUrl: './book-editor.component.scss',
++})
++export class BookEditorComponent {
++  @ViewChild('form') form?: NgForm;
++  @ViewChild('discardNotice') set discardNotice(element: ElementRef<HTMLElement> | undefined) {
++    if (element) { element.nativeElement.scrollIntoView({ block: 'nearest' }); element.nativeElement.focus(); }
++  }
++  private readonly destroyRef = inject(DestroyRef);
++  readonly statuses = BOOK_STATUSES;
++  readonly editing: boolean;
++  readonly book: BookUpsert;
++  saving = false;
++  error = '';
++  submitted = false;
++  confirmDiscard = false;
++  sessionExpired = false;
++
++  constructor(
++    @Inject(MAT_DIALOG_DATA) readonly data: Book | null,
++    private readonly api: BooksApiService,
++    readonly dialog: MatDialogRef<BookEditorComponent, Book>,
++  ) {
++    this.editing = !!data;
++    this.book = data ? {
++      title: data.title, author: data.author, genre: data.genre, status: data.status,
++      totalPages: data.totalPages, pagesRead: data.pagesRead, rating: data.rating, notes: data.notes,
++    } : {
++      title: '', author: '', genre: null, status: 'WANT_TO_READ',
++      totalPages: null, pagesRead: 0, rating: null, notes: null,
++    };
++    this.dialog.backdropClick().pipe(takeUntilDestroyed(this.destroyRef)).subscribe(() => this.requestClose());
++    this.dialog.keydownEvents().pipe(takeUntilDestroyed(this.destroyRef)).subscribe(event => {
++      if (event.key === 'Escape') { event.preventDefault(); this.requestClose(); }
++    });
++  }
++
++  @HostListener('window:beforeunload', ['$event'])
++  beforeUnload(event: BeforeUnloadEvent): void {
++    if (this.form?.dirty) { event.preventDefault(); event.returnValue = ''; }
++  }
++
++  requestClose(): void {
++    if (this.saving) return;
++    if (this.confirmDiscard) { this.confirmDiscard = false; return; }
++    if (this.form?.dirty) this.confirmDiscard = true;
++    else this.dialog.close();
++  }
++
++  get progressInvalid(): boolean {
++    return this.book.status !== 'COMPLETED' && this.book.totalPages !== null && this.book.pagesRead > this.book.totalPages;
++  }
++
++  get pagesInvalid(): boolean {
++    const autoComplete = this.book.status === 'COMPLETED' && this.book.totalPages !== null;
++    return (this.book.totalPages !== null && (!Number.isInteger(this.book.totalPages) || this.book.totalPages < 1 || this.book.totalPages > 100000)) ||
++      (!autoComplete && (!Number.isInteger(this.book.pagesRead) || this.book.pagesRead < 0 || this.book.pagesRead > 100000));
++  }
++
++  save(form: NgForm): void {
++    this.submitted = true;
++    if (this.saving || form.invalid || this.pagesInvalid || this.progressInvalid || !this.book.title.trim() || !this.book.author.trim()) return;
++    this.saving = true;
++    this.confirmDiscard = false;
++    this.error = '';
++    this.sessionExpired = false;
++    const payload = { ...this.book, title: this.book.title.trim(), author: this.book.author.trim() };
++    if (payload.status === 'COMPLETED' && payload.totalPages !== null) payload.pagesRead = payload.totalPages;
++    this.api.save(payload, this.data?.id).pipe(finalize(() => {
++      this.saving = false;
++    })).subscribe({
++      next: result => this.dialog.close(result),
++      error: (error: HttpErrorResponse) => {
++        if (error.status === 401) {
++          this.sessionExpired = true;
++          this.error = 'Сессия завершилась. Войдите в новой вкладке, затем повторите сохранение. Изменения остаются в форме.';
++        }
++        else if (error.status === 404) this.error = 'Книга уже удалена. Закройте окно и обновите библиотеку.';
++        else {
++          const errors: Record<string, string[]> | undefined = error.error?.errors;
++          this.error = errors ? Object.values(errors).flat().join(' ') : 'Не удалось сохранить книгу. Проверьте соединение и попробуйте ещё раз.';
++        }
++      },
++    });
++  }
++}
+diff --git a/src/app/modules/books-module/models/book.model.ts b/src/app/modules/books-module/models/book.model.ts
+new file mode 100644
+index 0000000..e174ace
+--- /dev/null
++++ b/src/app/modules/books-module/models/book.model.ts
+@@ -0,0 +1,46 @@
++export type BookStatus = 'WANT_TO_READ' | 'READING' | 'COMPLETED' | 'ON_HOLD' | 'DROPPED';
++export type BookSort = 'UPDATED_AT' | 'TITLE' | 'AUTHOR' | 'RATING';
++
++export const BOOK_STATUSES: { code: BookStatus; name: string; icon: string }[] = [
++  { code: 'WANT_TO_READ', name: 'Хочу прочитать', icon: 'bookmark_border' },
++  { code: 'READING', name: 'Читаю', icon: 'auto_stories' },
++  { code: 'COMPLETED', name: 'Прочитано', icon: 'task_alt' },
++  { code: 'ON_HOLD', name: 'Отложено', icon: 'pause_circle_outline' },
++  { code: 'DROPPED', name: 'Не дочитано', icon: 'stop_circle' },
++];
++
++export interface BookUpsert {
++  title: string;
++  author: string;
++  genre: string | null;
++  status: BookStatus;
++  totalPages: number | null;
++  pagesRead: number;
++  rating: number | null;
++  notes: string | null;
++}
++
++export interface Book extends BookUpsert {
++  id: string;
++  createdAt: string;
++  updatedAt: string;
++}
++
++export interface BookStats {
++  total: number;
++  wantToRead: number;
++  reading: number;
++  completed: number;
++  onHold: number;
++  dropped: number;
++  pagesRead: number;
++}
++
++export interface BookList {
++  items: Book[];
++  page: number;
++  pageSize: number;
++  total: number;
++  hasNext: boolean;
++  stats: BookStats;
++}
+diff --git a/src/app/modules/books-module/services/books-api.service.ts b/src/app/modules/books-module/services/books-api.service.ts
+new file mode 100644
+index 0000000..7430827
+--- /dev/null
++++ b/src/app/modules/books-module/services/books-api.service.ts
+@@ -0,0 +1,29 @@
++import { Injectable } from '@angular/core';
++import { HttpClient, HttpParams } from '@angular/common/http';
++import { Observable } from 'rxjs';
++import { environment } from '../../../../environments/environment';
++import { Book, BookList, BookSort, BookStatus, BookUpsert } from '../models/book.model';
++
++@Injectable({ providedIn: 'root' })
++export class BooksApiService {
++  private readonly url = `${environment.apiHost}/api/v1/books`;
++
++  constructor(private readonly http: HttpClient) {}
++
++  list(query: string, status: BookStatus | '', sortBy: BookSort, page: number): Observable<BookList> {
++    let params = new HttpParams().set('page', page).set('pageSize', 24).set('sortBy', sortBy);
++    if (query.trim()) params = params.set('query', query.trim());
++    if (status) params = params.set('status', status);
++    return this.http.get<BookList>(this.url, { params, withCredentials: true });
++  }
++
++  save(book: BookUpsert, id?: string): Observable<Book> {
++    return id
++      ? this.http.put<Book>(`${this.url}/${encodeURIComponent(id)}`, book, { withCredentials: true })
++      : this.http.post<Book>(this.url, book, { withCredentials: true });
++  }
++
++  delete(id: string): Observable<void> {
++    return this.http.delete<void>(`${this.url}/${encodeURIComponent(id)}`, { withCredentials: true });
++  }
++}
+diff --git a/src/test.ts b/src/test.ts
+index 8e1e186..311b367 100644
+--- a/src/test.ts
++++ b/src/test.ts
+@@ -14,3 +14,4 @@ getTestBed().initTestEnvironment(
+ );
+ 
+ import './app/modules/home-module/utils/home-widget-controls.spec';
++import './app/modules/books-module/books.component.spec';
+-- 
+2.39.1.windows.1
+
