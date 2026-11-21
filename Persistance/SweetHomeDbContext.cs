@@ -8,6 +8,7 @@ using Application.Modules.Wardrobe;
 using Application.Modules.Widgets;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
+using Persistance.Monitoring;
 
 namespace Persistance;
 
@@ -25,6 +26,18 @@ public class SweetHomeDbContext(DbContextOptions<SweetHomeDbContext> options)
             entity.Property(user => user.ApprovalStatus)
                 .HasConversion<string>()
                 .HasDefaultValue(ApprovalStatus.Pending);
+        });
+
+        builder.Entity<DailySectionActivity>(entity =>
+        {
+            entity.HasKey(activity => new { activity.Day, activity.UserId, activity.Section });
+            entity.HasOne<ApplicationUser>().WithMany().HasForeignKey(activity => activity.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<ApiFailure>(entity =>
+        {
+            entity.HasIndex(failure => new { failure.OccurredAt, failure.Id });
         });
 
         builder.Entity<Book>(entity =>
@@ -318,6 +331,8 @@ public class SweetHomeDbContext(DbContextOptions<SweetHomeDbContext> options)
         });
     }
 
+    public DbSet<DailySectionActivity> DailySectionActivities { get; set; }
+    public DbSet<ApiFailure> ApiFailures { get; set; }
     public DbSet<MainWidget> MainWidgets { get; set; }
     public DbSet<Book> Books { get; set; }
     public DbSet<HealthEntry> HealthEntries { get; set; }

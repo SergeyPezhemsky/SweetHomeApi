@@ -970,6 +970,66 @@ namespace Persistance.Migrations
                     b.ToTable("AspNetUserTokens", (string)null);
                 });
 
+            modelBuilder.Entity("Persistance.Monitoring.ApiFailure", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("ExceptionType")
+                        .HasColumnType("text");
+
+                    b.Property<string>("Method")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("OccurredAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Route")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<int>("StatusCode")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("TraceId")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OccurredAt", "Id");
+
+                    b.ToTable("ApiFailures");
+                });
+
+            modelBuilder.Entity("Persistance.Monitoring.DailySectionActivity", b =>
+                {
+                    b.Property<DateOnly>("Day")
+                        .HasColumnType("date");
+
+                    b.Property<string>("UserId")
+                        .HasColumnType("text");
+
+                    b.Property<string>("Section")
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("LastSeenAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<long>("Visits")
+                        .HasColumnType("bigint");
+
+                    b.HasKey("Day", "UserId", "Section");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("DailySectionActivities");
+                });
+
             modelBuilder.Entity("Application.Modules.Books.Book", b =>
                 {
                     b.HasOne("Application.Modules.Auth.ApplicationUser", "User")
@@ -1207,6 +1267,15 @@ namespace Persistance.Migrations
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityUserToken<string>", b =>
+                {
+                    b.HasOne("Application.Modules.Auth.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Persistance.Monitoring.DailySectionActivity", b =>
                 {
                     b.HasOne("Application.Modules.Auth.ApplicationUser", null)
                         .WithMany()

@@ -16,6 +16,7 @@ using Application.Modules.Finance;
 using SweetHomeApi.Infrastructure.Finance;
 using SweetHomeApi.Infrastructure.Flatlay;
 using SweetHomeApi.Infrastructure.HomeAssistant;
+using SweetHomeApi.Infrastructure.Monitoring;
 using SweetHomeApi.Infrastructure.Realtime;
 using SweetHomeApi.Registration;
 
@@ -128,6 +129,7 @@ var app = builder.Build();
 app.UseHttpsRedirection();
 app.UseRouting();
 app.UseCors("AllowSpecificOrigin");
+app.UseMiddleware<ApiFailureMiddleware>();
 
 // Swagger только в Development или при явном Swagger__Enabled=true
 if (app.Environment.IsDevelopment() || app.Configuration.GetValue<bool>("Swagger:Enabled"))
