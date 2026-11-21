@@ -1,5 +1,6 @@
 using Application.Modules.Auth;
 using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -13,6 +14,7 @@ using Application.Modules.HomeAssistant;
 using Application.Modules.Wardrobe;
 using Persistance;
 using Application.Modules.Finance;
+using SweetHomeApi.Infrastructure.Auth;
 using SweetHomeApi.Infrastructure.Finance;
 using SweetHomeApi.Infrastructure.Flatlay;
 using SweetHomeApi.Infrastructure.HomeAssistant;
@@ -20,7 +22,8 @@ using SweetHomeApi.Infrastructure.Monitoring;
 using SweetHomeApi.Infrastructure.Realtime;
 using SweetHomeApi.Registration;
 
-var builder = WebApplication.CreateBuilder(args);
+var importDataProtectionKeys = args is ["--import-data-protection-keys"];
+var builder = WebApplication.CreateBuilder(importDataProtectionKeys ? [] : args);
 builder.Configuration.AddJsonFile("appsettings.Local.json", optional: true, reloadOnChange: true);
 builder.Configuration.AddEnvironmentVariables();
 
@@ -91,6 +94,9 @@ builder.Services.AddDbContext<SweetHomeDbContext>(options =>
     options.UseNpgsql(connectionString)
         .ConfigureWarnings(warnings => warnings.Ignore(RelationalEventId.PendingModelChangesWarning))
 );
+
+builder.Services.AddDataProtection()
+    .PersistKeysToDbContext<SweetHomeDbContext>();
 
 builder.Services.AddIdentity<ApplicationUser, IdentityRole>()
     .AddEntityFrameworkStores<SweetHomeDbContext>()
@@ -175,6 +181,13 @@ using (var scope = app.Services.CreateScope())
     {
         var context = services.GetRequiredService<SweetHomeDbContext>();
         context.Database.Migrate();
+        if (importDataProtectionKeys)
+        {
+            var imported = LegacyDataProtectionKeys.Import(context, Console.OpenStandardInput());
+            logger.LogInformation("Imported {Count} Data Protection keys and revocations.", imported);
+            return;
+        }
+
         ApplySmartHomeSchemaGuard(context);
         ApplyMoviesSchemaGuard(context);
         ApplyWardrobeSchemaGuard(context);
@@ -182,7 +195,7 @@ using (var scope = app.Services.CreateScope())
     }
     catch (Exception ex)
     {
-        logger.LogCritical(ex, "Failed to apply database migrations.");
+        logger.LogCritical(ex, "Failed to initialize the database.");
         throw;
     }
 }

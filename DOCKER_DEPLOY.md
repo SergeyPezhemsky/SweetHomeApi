@@ -106,9 +106,14 @@ Workflow `.github/workflows/deploy-vps.yml` запускается после к
 cd "$VPS_APP_DIR"
 git fetch origin master
 git reset --hard origin/master
-docker compose up -d --build
+bash _deploy/deploy-api.sh
+docker compose up -d --build flatlay
 docker image prune -f
 ```
+
+Ключи ASP.NET Core Data Protection хранятся в таблице `DataProtectionKeys`.
+При переходе с файлового хранения скрипт переносит ключи из работающего API в PostgreSQL до замены контейнера.
+При ручном обновлении существующей установки запускайте этот скрипт, пока старый контейнер API работает.
 
 ## Проверка на VPS
 

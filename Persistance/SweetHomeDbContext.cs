@@ -6,6 +6,7 @@ using Application.Modules.Movies;
 using Application.Modules.SmartHome;
 using Application.Modules.Wardrobe;
 using Application.Modules.Widgets;
+using Microsoft.AspNetCore.DataProtection.EntityFrameworkCore;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using Persistance.Monitoring;
@@ -13,8 +14,7 @@ using Persistance.Monitoring;
 namespace Persistance;
 
 public class SweetHomeDbContext(DbContextOptions<SweetHomeDbContext> options)
-    : IdentityDbContext<ApplicationUser>(options)
-
+    : IdentityDbContext<ApplicationUser>(options), IDataProtectionKeyContext
 {
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -331,6 +331,7 @@ public class SweetHomeDbContext(DbContextOptions<SweetHomeDbContext> options)
         });
     }
 
+    public DbSet<DataProtectionKey> DataProtectionKeys { get; set; }
     public DbSet<DailySectionActivity> DailySectionActivities { get; set; }
     public DbSet<ApiFailure> ApiFailures { get; set; }
     public DbSet<MainWidget> MainWidgets { get; set; }

@@ -145,7 +145,7 @@ jobs:
             git fetch origin master
             git reset --hard origin/master
             # Сначала API и база: их выкатка не ждёт тяжёлый образ и не зависит от него.
-            docker compose up -d --build api postgres
+            bash _deploy/deploy-api.sh
             # Удаление фона — отдельно и без остановки деплоя: если сборка не удалась,
             # API работает, фото просто остаются без обработки (повторить можно в форме вещи).
             if timeout 45m docker compose build flatlay; then
