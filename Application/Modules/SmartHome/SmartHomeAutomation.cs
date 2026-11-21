@@ -1,4 +1,4 @@
-using Microsoft.AspNetCore.Identity;
+using Application.Modules.Auth;
 
 namespace Application.Modules.SmartHome;
 
@@ -24,5 +24,5 @@ public class SmartHomeAutomation
 
     public required string UserId { get; set; }
 
-    public IdentityUser? User { get; set; }
+    public ApplicationUser? User { get; set; }
 }

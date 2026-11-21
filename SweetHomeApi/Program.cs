@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Builder;
+using Application.Modules.Auth;
+using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -90,7 +91,7 @@ builder.Services.AddDbContext<SweetHomeDbContext>(options =>
         .ConfigureWarnings(warnings => warnings.Ignore(RelationalEventId.PendingModelChangesWarning))
 );
 
-builder.Services.AddIdentity<IdentityUser, IdentityRole>()
+builder.Services.AddIdentity<ApplicationUser, IdentityRole>()
     .AddEntityFrameworkStores<SweetHomeDbContext>()
     .AddDefaultTokenProviders();
 
@@ -142,7 +143,7 @@ app.UseWebSockets();
 app.MapControllers();
 app.MapGet("/ws/home", async (
     HttpContext context,
-    UserManager<IdentityUser> userManager,
+    UserManager<ApplicationUser> userManager,
     IHomeRealtimeBroadcaster realtimeBroadcaster,
     CancellationToken cancellationToken) =>
 {

@@ -40,6 +40,30 @@ docker compose up -d --build
 
 API будет слушать порт VPS из `API_PORT`, по умолчанию `5000`.
 
+## Назначение первого администратора
+
+После запуска API применит миграцию и сохранит доступ для ранее зарегистрированных пользователей.
+На новой базе сначала зарегистрируй аккаунт, которому нужен доступ администратора.
+
+Открой PostgreSQL из каталога с `docker-compose.yml`.
+
+```bash
+docker compose exec postgres sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB"'
+```
+
+Найди нужный аккаунт и подставь его ID в команду назначения.
+
+```sql
+SELECT "Id", "UserName", "Email" FROM "AspNetUsers" ORDER BY "UserName";
+
+UPDATE "AspNetUsers"
+SET "IsAdmin" = true, "ApprovalStatus" = 'Approved', "ConcurrencyStamp" = gen_random_uuid()::text
+WHERE "Id" = '<ID аккаунта>'
+RETURNING "UserName", "Email";
+```
+
+Открой «Профиль» под этим аккаунтом, чтобы увидеть заявки на регистрацию.
+
 ## SSH ключ для GitHub Actions
 
 На своей машине или на VPS создай отдельный ключ для деплоя:

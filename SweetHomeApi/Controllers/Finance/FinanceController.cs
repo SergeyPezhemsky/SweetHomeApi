@@ -1,3 +1,4 @@
+using Application.Modules.Auth;
 using System.Globalization;
 using Application.Modules.Finance;
 using Application.Modules.Finance.Seeds;
@@ -17,7 +18,7 @@ namespace SweetHomeApi.Controllers.Finance;
 [WardrobeModelStateErrors]
 public class FinanceController(
     IFinanceService financeService,
-    UserManager<IdentityUser> userManager) : ControllerBase
+    UserManager<ApplicationUser> userManager) : ControllerBase
 {
     public const int MaxImageBytes = 5 * 1024 * 1024;
     private const int MaxRequestBytes = MaxImageBytes + 512 * 1024;

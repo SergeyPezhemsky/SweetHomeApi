@@ -1,3 +1,4 @@
+using Application.Modules.Auth;
 using Application.Modules.HomeAssistant;
 using Application.Modules.SmartHome;
 using Microsoft.AspNetCore.Authorization;
@@ -17,7 +18,7 @@ namespace SweetHomeApi.Controllers.SmartHome;
 public class SmartHomeController(
     IHomeAssistantService homeAssistantService,
     ISmartHomeService smartHomeService,
-    UserManager<IdentityUser> userManager,
+    UserManager<ApplicationUser> userManager,
     IHomeRealtimeBroadcaster realtimeBroadcaster) : ControllerBase
 {
     [HttpGet("widget-catalog")]

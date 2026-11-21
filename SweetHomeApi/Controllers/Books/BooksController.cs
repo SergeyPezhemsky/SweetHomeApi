@@ -1,3 +1,4 @@
+using Application.Modules.Auth;
 using Application.Modules.Books;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
@@ -9,7 +10,7 @@ namespace SweetHomeApi.Controllers.Books;
 [ApiController]
 [Authorize]
 [Route("api/v1/books")]
-public class BooksController(IBookService service, UserManager<IdentityUser> userManager) : ControllerBase
+public class BooksController(IBookService service, UserManager<ApplicationUser> userManager) : ControllerBase
 {
     [HttpGet]
     public async Task<IActionResult> GetList([FromQuery] BookQuery request)

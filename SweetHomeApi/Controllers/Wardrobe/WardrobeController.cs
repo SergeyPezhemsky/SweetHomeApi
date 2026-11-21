@@ -1,3 +1,4 @@
+using Application.Modules.Auth;
 using Application.Modules.Wardrobe;
 using Application.Modules.Wardrobe.Seeds;
 using Microsoft.AspNetCore.Authorization;
@@ -17,7 +18,7 @@ namespace SweetHomeApi.Controllers.Wardrobe;
 [WardrobeModelStateErrors]
 public class WardrobeController(
     IWardrobeService wardrobeService,
-    UserManager<IdentityUser> userManager,
+    UserManager<ApplicationUser> userManager,
     IWardrobeImageQueue imageQueue) : ControllerBase
 {
     public const int MaxImageBytes = 5 * 1024 * 1024;

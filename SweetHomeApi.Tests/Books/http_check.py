@@ -1,4 +1,7 @@
-"""HTTP regression suite for an isolated running SweetHome API and PostgreSQL."""
+"""HTTP regression suite for an isolated running SweetHome API and PostgreSQL.
+
+Set BOOKS_QA_ADMIN_EMAIL and BOOKS_QA_ADMIN_PASSWORD for an approved test administrator.
+"""
 import json
 import os
 import pathlib
@@ -9,6 +12,7 @@ import urllib.request
 from http.cookies import SimpleCookie
 
 BASE = os.environ.get('BOOKS_QA_BASE_URL', 'http://127.0.0.1:5099').rstrip('/')
+REGISTRATION_REQUESTS = '/api/Account/RegistrationRequests'
 results = []
 
 def call(method, path, data=None, cookie=None, expected=200, label=None):
@@ -31,6 +35,21 @@ def call(method, path, data=None, cookie=None, expected=200, label=None):
     new_cookie = '; '.join(key + '=' + item.value for key, item in parsed.items())
     return value, new_cookie
 
+
+def register_and_login(account, admin_cookie):
+    _, registration_cookie = call('POST', '/api/Account/Register', account, label='register pending test user')
+    assert not registration_cookie
+    credentials = {'email': account['email'], 'password': account['password']}
+    _, pending_cookie = call('POST', '/api/Account/Login', credentials, expected=403, label='pending login denied')
+    assert not pending_cookie
+    requests, _ = call('GET', REGISTRATION_REQUESTS, cookie=admin_cookie, label='list pending registrations')
+    user_id = next(item['id'] for item in requests if item['email'] == account['email'])
+    call('PUT', REGISTRATION_REQUESTS + '/' + user_id, {'status': 'Approved'}, admin_cookie, 204, 'approve test user')
+    _, cookie = call('POST', '/api/Account/Login', credentials, label='approved login issues auth cookie')
+    assert cookie
+    return cookie
+
+
 suffix = str(time.time_ns())
 password = 'BooksQa!2026Pass123'
 account = {'email': 'books.owner.' + suffix + '@example.test', 'name': 'books_owner_' + suffix,
@@ -39,15 +58,15 @@ other = {'email': 'books.other.' + suffix + '@example.test', 'name': 'books_othe
          'password': password, 'confirmPassword': password}
 
 call('GET', '/api/v1/books', expected=401, label='unauthenticated books rejected')
-_, owner_cookie = call('POST', '/api/Account/Register', account, label='register owner with auth cookie')
-assert owner_cookie
-owner, _ = call('GET', '/api/Account/User', cookie=owner_cookie, label='owner registration cookie works')
+_, admin_cookie = call('POST', '/api/Account/Login', {
+    'email': os.environ['BOOKS_QA_ADMIN_EMAIL'],
+    'password': os.environ['BOOKS_QA_ADMIN_PASSWORD'],
+}, label='test administrator login')
+assert admin_cookie
+owner_cookie = register_and_login(account, admin_cookie)
+owner, _ = call('GET', '/api/Account/User', cookie=owner_cookie, label='owner login cookie works')
 assert owner['name'] == account['name']
-_, login_cookie = call('POST', '/api/Account/Login', {'email': account['email'], 'password': password}, label='login issues auth cookie')
-assert login_cookie
-call('GET', '/api/Account/User', cookie=login_cookie, label='login cookie works')
-_, other_cookie = call('POST', '/api/Account/Register', other, label='register separate user')
-assert other_cookie
+other_cookie = register_and_login(other, admin_cookie)
 empty, _ = call('GET', '/api/v1/books', cookie=owner_cookie, label='empty library stats')
 assert empty['items'] == [] and empty['stats']['total'] == 0 and empty['total'] == 0
 

@@ -1,4 +1,4 @@
-using Microsoft.AspNetCore.Identity;
+using Application.Modules.Auth;
 
 namespace Application.Modules.Finance;
 
@@ -43,7 +43,7 @@ public class FinanceReceipt
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
     public string UserId { get; set; } = string.Empty;
-    public IdentityUser User { get; set; } = null!;
+    public ApplicationUser User { get; set; } = null!;
     public List<FinanceReceiptItem> Items { get; set; } = [];
 }
 
@@ -80,7 +80,7 @@ public class FinanceCategoryRule
     public string Key { get; set; } = string.Empty;
     public FinanceCategory Category { get; set; }
     public DateTime UpdatedAt { get; set; }
-    public IdentityUser User { get; set; } = null!;
+    public ApplicationUser User { get; set; } = null!;
 }
 
 public static class FinanceDefaults

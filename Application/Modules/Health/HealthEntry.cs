@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Identity;
+using Application.Modules.Auth;
 
 namespace Application.Modules.Health;
 
@@ -7,7 +7,7 @@ public class HealthEntry
     public string Id { get; set; } = Guid.NewGuid().ToString();
     public DateOnly Date { get; set; }
     public string UserId { get; set; } = string.Empty;
-    public IdentityUser? User { get; set; }
+    public ApplicationUser? User { get; set; }
 
     public string? Weight { get; set; }
     public string? BloodPressure { get; set; }

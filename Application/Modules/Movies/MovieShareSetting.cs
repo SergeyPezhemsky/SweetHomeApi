@@ -1,4 +1,4 @@
-using Microsoft.AspNetCore.Identity;
+using Application.Modules.Auth;
 
 namespace Application.Modules.Movies;
 
@@ -6,5 +6,5 @@ public class MovieShareSetting
 {
     public string UserId { get; set; } = string.Empty;
     public bool ShareMovies { get; set; }
-    public IdentityUser User { get; set; } = null!;
+    public ApplicationUser User { get; set; } = null!;
 }

@@ -1,3 +1,4 @@
+using Application.Modules.Auth;
 using Application.Modules.Books;
 using Application.Modules.Finance;
 using Application.Modules.Health;
@@ -5,19 +6,26 @@ using Application.Modules.Movies;
 using Application.Modules.SmartHome;
 using Application.Modules.Wardrobe;
 using Application.Modules.Widgets;
-using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 
 namespace Persistance;
 
 public class SweetHomeDbContext(DbContextOptions<SweetHomeDbContext> options)
-    : IdentityDbContext<IdentityUser>(options)
+    : IdentityDbContext<ApplicationUser>(options)
 
 {
     protected override void OnModelCreating(ModelBuilder builder)
     {
         base.OnModelCreating(builder);
+
+        builder.Entity<ApplicationUser>(entity =>
+        {
+            entity.Property(user => user.IsAdmin).HasDefaultValue(false);
+            entity.Property(user => user.ApprovalStatus)
+                .HasConversion<string>()
+                .HasDefaultValue(ApprovalStatus.Pending);
+        });
 
         builder.Entity<Book>(entity =>
         {

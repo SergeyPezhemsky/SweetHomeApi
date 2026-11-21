@@ -1,4 +1,5 @@
-﻿using Application.Modules.Widgets;
+using Application.Modules.Auth;
+using Application.Modules.Widgets;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
@@ -11,14 +12,14 @@ namespace SweetHomeApi.Controllers.Widgets;
 public class WidgetsController : ControllerBase
 {
     private readonly IWidgetsService _widgetsService; // Используйте интерфейс для лучшей абстракции
-    private readonly UserManager<IdentityUser> _userManager;
+    private readonly UserManager<ApplicationUser> _userManager;
 
     /// <summary>
     /// Инъекция зависимостей через конструктор.
     /// </summary>
     /// <param name="widgetsService">Сервис для работы с виджетами.</param>
     /// <param name="userManager">Менеджер пользователей.</param>
-    public WidgetsController(IWidgetsService widgetsService, UserManager<IdentityUser> userManager)
+    public WidgetsController(IWidgetsService widgetsService, UserManager<ApplicationUser> userManager)
     {
         _widgetsService = widgetsService;
         _userManager = userManager;

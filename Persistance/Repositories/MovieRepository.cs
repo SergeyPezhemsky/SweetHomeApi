@@ -1,5 +1,5 @@
+using Application.Modules.Auth;
 using Application.Modules.Movies;
-using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 
 namespace Persistance.Repositories;
@@ -111,7 +111,7 @@ public class MovieRepository(SweetHomeDbContext context) : IMovieRepository
             .AsNoTracking()
             .Where(x => x.ShareMovies && x.UserId != userId)
             .Join(
-                context.Set<IdentityUser>().AsNoTracking(),
+                context.Set<ApplicationUser>().AsNoTracking(),
                 setting => setting.UserId,
                 user => user.Id,
                 (setting, user) => user);
@@ -173,7 +173,7 @@ public class MovieRepository(SweetHomeDbContext context) : IMovieRepository
 
     public async Task<MovieFriendMoviesResult> GetFriendMoviesAsync(string userId, string friendUserId, int page, int pageSize)
     {
-        var owner = await context.Set<IdentityUser>()
+        var owner = await context.Set<ApplicationUser>()
             .AsNoTracking()
             .Where(x => x.Id == friendUserId)
             .Select(x => new { x.Id, x.UserName })
@@ -238,7 +238,7 @@ public class MovieRepository(SweetHomeDbContext context) : IMovieRepository
 
     public Task<bool> UserExistsAsync(string userId)
     {
-        return context.Set<IdentityUser>()
+        return context.Set<ApplicationUser>()
             .AsNoTracking()
             .AnyAsync(x => x.Id == userId);
     }

@@ -1,29 +1,34 @@
+using Application.Modules.Auth;
 using Application.Modules.Widgets;
+using System.ComponentModel.DataAnnotations;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
+using Persistance;
 using SweetHomeApi.Controllers.Auth.Dto;
 
 namespace SweetHomeApi.Controllers.Auth
 {
     public class AccountController : Controller
     {
-        private readonly SignInManager<IdentityUser> _signInManager;
-        private readonly UserManager<IdentityUser> _userManager;
-        private readonly IWidgetsService _widgetsService; // Используйте интерфейс для лучшей абстракции
+        private readonly SignInManager<ApplicationUser> _signInManager;
+        private readonly UserManager<ApplicationUser> _userManager;
+        private readonly IWidgetsService _widgetsService;
+        private readonly SweetHomeDbContext _db;
 
-        // Инициализация зависимостей через конструктор
         public AccountController(
-            SignInManager<IdentityUser> signInManager, 
-            UserManager<IdentityUser> userManager,
-            IWidgetsService widgetsService)
+            SignInManager<ApplicationUser> signInManager,
+            UserManager<ApplicationUser> userManager,
+            IWidgetsService widgetsService,
+            SweetHomeDbContext db)
         {
             _signInManager = signInManager;
             _userManager = userManager;
             _widgetsService = widgetsService;
+            _db = db;
         }
 
 
@@ -35,10 +40,19 @@ namespace SweetHomeApi.Controllers.Auth
                 return BadRequest(ModelState);
             
             var user = await _userManager.FindByEmailAsync(loginRequest.Email);
-            
-            if (user == null || user.UserName == null)
+            if (user?.UserName is null)
+                return Unauthorized(new { message = "Неверный логин или пароль" });
+
+            if (user.ApprovalStatus != ApprovalStatus.Approved)
             {
-                return Unauthorized(new { Message = "Пользователь не найден" });
+                var passwordCheck = await _signInManager.CheckPasswordSignInAsync(user, loginRequest.Password, false);
+                if (!passwordCheck.Succeeded)
+                    return Unauthorized(new { message = "Неверный логин или пароль" });
+
+                var message = user.ApprovalStatus == ApprovalStatus.Rejected
+                    ? "Администратор отклонил заявку на регистрацию."
+                    : "Заявка на регистрацию ожидает одобрения администратора.";
+                return StatusCode(StatusCodes.Status403Forbidden, new { message });
             }
 
             var result =
@@ -59,36 +73,43 @@ namespace SweetHomeApi.Controllers.Auth
                 return BadRequest(ModelState);
             }
             
-            var user = await _userManager.FindByEmailAsync(model.Email);
-            
-            if (user != null)
-            {
-                return BadRequest("Пользователь уже зарегестрирован");;
-            }
+            await using var transaction = await _db.Database.BeginTransactionAsync();
+            var emailLock = "registration:" + _userManager.NormalizeEmail(model.Email);
+            await _db.Database.ExecuteSqlInterpolatedAsync($"SELECT pg_advisory_xact_lock(hashtext({emailLock}))");
 
-            // Создаем нового пользователя
-            var newUser = new IdentityUser
+            if (await _userManager.FindByEmailAsync(model.Email) is not null)
+                return BadRequest(new { message = "Пользователь с этой почтой уже зарегистрирован." });
+
+            var newUser = new ApplicationUser
             {
                 UserName = model.Name,
-                Email = model.Email
+                Email = model.Email,
+                RegisteredAt = DateTime.UtcNow
             };
 
-            // Пытаемся создать пользователя
-            var result = await _userManager.CreateAsync(newUser, model.Password);
-            if (result.Succeeded)
+            IdentityResult result;
+            try
             {
-                // После успешной регистрации, можно автоматически залогинить пользователя, если требуется
-                await _widgetsService.AddDefaultWidgetForUser(newUser.Id);
-                await _signInManager.SignInAsync(newUser, isPersistent: true);
-                return Ok(new { message = "Пользователь успешно зарегистрирован" });
+                result = await _userManager.CreateAsync(newUser, model.Password);
+            }
+            catch (DbUpdateException ex) when (ex.InnerException is PostgresException
+                { SqlState: PostgresErrorCodes.UniqueViolation, ConstraintName: "UserNameIndex" })
+            {
+                return BadRequest(new { message = "Этот ник уже занят." });
             }
 
-            // Если возникли ошибки, возвращаем их
+            if (result.Succeeded)
+            {
+                await _widgetsService.AddDefaultWidgetForUser(newUser.Id);
+                await transaction.CommitAsync();
+                return Ok(new { message = "Заявка отправлена. Вход станет доступен после одобрения администратором." });
+            }
+
             foreach (var error in result.Errors)
             {
                 ModelState.AddModelError("", error.Description);
             }
-            return BadRequest(ModelState); // Возвращаем ошибки валидации
+            return BadRequest(ModelState);
         }
 
         [Authorize]
@@ -165,7 +186,8 @@ namespace SweetHomeApi.Controllers.Auth
             return NoContent();
         }
 
-        private OkObjectResult Profile(IdentityUser user) => Ok(new { name = user.UserName, email = user.Email });
+        private OkObjectResult Profile(ApplicationUser user) =>
+            Ok(new { name = user.UserName, email = user.Email, isAdmin = user.IsAdmin });
 
         private IActionResult ProfileError(IdentityResult result)
         {
@@ -197,8 +219,11 @@ namespace SweetHomeApi.Controllers.Auth
 
         public class LoginRequest
         {
-            public string Email { get; set; }
-            public string Password { get; set; }
+            [Required, EmailAddress]
+            public string Email { get; set; } = string.Empty;
+
+            [Required]
+            public string Password { get; set; } = string.Empty;
         }
     }
 }

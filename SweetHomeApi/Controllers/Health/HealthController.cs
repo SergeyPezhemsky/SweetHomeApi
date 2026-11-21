@@ -1,4 +1,5 @@
-﻿using System.Globalization;
+using Application.Modules.Auth;
+using System.Globalization;
 using Application.Modules.Health;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
@@ -9,7 +10,7 @@ namespace SweetHomeApi.Controllers.Health;
 
 [ApiController]
 [Route("api/[controller]")]
-public class HealthController(IHealthService healthService, UserManager<IdentityUser> userManager) : ControllerBase
+public class HealthController(IHealthService healthService, UserManager<ApplicationUser> userManager) : ControllerBase
 {
     [HttpGet]
     [Authorize]

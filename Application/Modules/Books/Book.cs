@@ -1,4 +1,4 @@
-using Microsoft.AspNetCore.Identity;
+using Application.Modules.Auth;
 
 namespace Application.Modules.Books;
 
@@ -19,7 +19,7 @@ public class Book
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
     public string UserId { get; set; } = string.Empty;
-    public IdentityUser User { get; set; } = null!;
+    public ApplicationUser User { get; set; } = null!;
 }
 
 public class BookQuery

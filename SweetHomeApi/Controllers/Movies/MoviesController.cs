@@ -1,3 +1,4 @@
+using Application.Modules.Auth;
 using Application.Modules.Movies;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
@@ -10,7 +11,7 @@ namespace SweetHomeApi.Controllers.Movies;
 [ApiController]
 [Authorize]
 [Route("api/v1/movies")]
-public class MoviesController(IMovieService movieService, UserManager<IdentityUser> userManager) : ControllerBase
+public class MoviesController(IMovieService movieService, UserManager<ApplicationUser> userManager) : ControllerBase
 {
     [HttpGet]
     public async Task<IActionResult> GetList(
