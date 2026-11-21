@@ -1,5 +1,6 @@
 using Application.Modules.Auth;
 using Application.Modules.Books;
+using Application.Modules.Coins;
 using Application.Modules.Finance;
 using Application.Modules.Health;
 using Application.Modules.Movies;
@@ -51,6 +52,19 @@ public class SweetHomeDbContext(DbContextOptions<SweetHomeDbContext> options)
             entity.HasIndex(e => new { e.UserId, e.Status });
             entity.HasIndex(e => new { e.UserId, e.UpdatedAt });
             entity.HasOne(e => e.User).WithMany().HasForeignKey(e => e.UserId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<Coin>(entity =>
+        {
+            entity.Property(coin => coin.Name).HasMaxLength(96).IsRequired();
+            entity.Property(coin => coin.Country).HasMaxLength(60);
+            entity.Property(coin => coin.Value).HasMaxLength(50);
+            entity.Property(coin => coin.Grade).HasMaxLength(5);
+            entity.Property(coin => coin.Location).HasMaxLength(120);
+            entity.Property(coin => coin.Notes).HasMaxLength(2000);
+            entity.HasIndex(coin => new { coin.UserId, coin.CreatedAt });
+            entity.HasOne<ApplicationUser>().WithMany().HasForeignKey(coin => coin.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
 
         builder.Entity<MainWidget>(entity =>
@@ -336,6 +350,7 @@ public class SweetHomeDbContext(DbContextOptions<SweetHomeDbContext> options)
     public DbSet<ApiFailure> ApiFailures { get; set; }
     public DbSet<MainWidget> MainWidgets { get; set; }
     public DbSet<Book> Books { get; set; }
+    public DbSet<Coin> Coins { get; set; }
     public DbSet<HealthEntry> HealthEntries { get; set; }
     public DbSet<Movie> Movies { get; set; }
     public DbSet<MovieShareSetting> MovieShareSettings { get; set; }

@@ -14,7 +14,7 @@ namespace SweetHomeApi.Controllers.Monitoring;
 public sealed class ActivityController(SweetHomeDbContext db, UserManager<ApplicationUser> users) : ControllerBase
 {
     private static readonly HashSet<string> Sections =
-        ["main", "home", "health", "movies", "wardrobe", "finance", "books", "profile"];
+        ["main", "home", "health", "movies", "wardrobe", "finance", "books", "coins", "profile"];
 
     [HttpPost("Visits")]
     [Consumes("application/json")]

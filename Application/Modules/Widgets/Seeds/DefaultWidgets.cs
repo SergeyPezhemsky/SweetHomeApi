@@ -50,17 +50,7 @@ public static class DefaultMainWidgets
                 Hide = false,
                 UserId = userId
             },
-            new MainWidget
-            {
-                Id = Guid.NewGuid().ToString(),
-                Alias = "coins",
-                Order = 6,
-                Name = "Монеты",
-                Icon = "toll",
-                Size = 3,
-                Hide = false,
-                UserId = userId
-            },
+            CreateCoinsWidget(userId, 6),
             new MainWidget
             {
                 Id = Guid.NewGuid().ToString(),
@@ -77,13 +67,14 @@ public static class DefaultMainWidgets
         };
     }
 
+    public const string CoinsAlias = "coins";
     public const string WardrobeAlias = "wardrobe";
     public const string FinanceAlias = "finance";
 
     /// <summary>
     /// Виджеты, которые появились после первых регистраций и должны быть добавлены существующим пользователям.
     /// </summary>
-    public static IReadOnlyList<string> BackfilledAliases { get; } = [WardrobeAlias, FinanceAlias];
+    public static IReadOnlyList<string> BackfilledAliases { get; } = [WardrobeAlias, FinanceAlias, CoinsAlias];
 
     public static MainWidget? CreateBackfilledWidget(string alias, string userId, int order)
     {
@@ -91,9 +82,22 @@ public static class DefaultMainWidgets
         {
             WardrobeAlias => CreateWardrobeWidget(userId, order),
             FinanceAlias => CreateFinanceWidget(userId, order),
+            CoinsAlias => CreateCoinsWidget(userId, order),
             _ => null
         };
     }
+
+    private static MainWidget CreateCoinsWidget(string userId, int order) => new()
+    {
+        Id = Guid.NewGuid().ToString(),
+        Alias = CoinsAlias,
+        Order = order,
+        Name = "Монеты",
+        Icon = "toll",
+        Size = 3,
+        Hide = false,
+        UserId = userId
+    };
 
     private static MainWidget CreateWardrobeWidget(string userId, int order)
     {
